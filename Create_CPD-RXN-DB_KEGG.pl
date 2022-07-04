@@ -18,7 +18,38 @@ use Sort::Naturally 'nsort';
 #~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~#
 
 
+sub download_open ($) {
+    # Return a read-only file handle to content of given URL.  If the
+    # $CACHE_DIR directory exist, then the downloaded file is persistently
+    # saved there and will be re-used upon subsequent requests.
+    my $CACHE_DIR = "./dl-cache";
+    my $url = shift;
+    my $fname = $url;
+    my $fh;
+    if (-d $CACHE_DIR) {
+        $fname =~ s/^https:\/\///;
+        $fname =~ s/[\/]/-/g;
+        my $fpath = "$CACHE_DIR/$fname";
+        if (! -e $fpath) {
+            if (system("wget", "-q", "-O", $fpath, $url) != 0) {
+                my $wget_errno = $!;
+                unlink $fpath or die "failed to unlink $fpath: $!";
+                die "wget $url to $fpath failed: $wget_errno"; };
+        }
+        open($fh, "<", $fpath) || die "failed to open $fpath: $!";
+    } else {
+        # on-the-fly download
+        open($fh, "-|", "wget", "-q", "-O", "-", $url) || die "failed: transient wget of $url: $!";
+    }
+    return $fh;
+}
 
+sub download_str ($) {
+    # Get URL content as string.  A cached copy may be used if available.
+    my $fh = download_open(shift);
+    local $/ = undef;
+    return <$fh>;
+}
 
 ################################################
 ########    SET INPUT/OUTPUT FILES    ##########
@@ -27,16 +58,15 @@ use Sort::Naturally 'nsort';
 #LIVE DOWNLOADS: -- leaving here so Anders can split how he needs in his snakemake while I can put this into GitHub for non-UMich users
 $time=localtime;
 print "DOWNLOAD INPUTS time $time\n";
-qx{wget -N https://www.tcdb.org/cgi-bin/substrates/getSubstrates.py};
-$ec_up = `wget -q -O - https://ftp.expasy.org/databases/enzyme/enzyme.dat`;
-$kegg_cpds = `wget -q -O - https://rest.kegg.jp/list/compound`;
-$kegg_rxns = `wget -q -O - https://rest.kegg.jp/list/reaction`;
+my $INTRCH = download_open("https://www.tcdb.org/cgi-bin/substrates/getSubstrates.py");
+$ec_up = download_str("https://ftp.expasy.org/databases/enzyme/enzyme.dat");
+$kegg_cpds = download_str("https://rest.kegg.jp/list/compound");
+$kegg_rxns = download_str("https://rest.kegg.jp/list/reaction");
 
 
 #OPEN/CHECK INPUTS:
 $time=localtime;
 print "OPEN / CHECK INPUTS time $time\n";
-open(INTRCH,	"getSubstrates.py")		||die "unable to open getSubstrates.py: $!\n";
 
 #OPEN/CHECK OUTPUTS:
 open(OUTKGC, ">", "KEGG_CPD_DB.txt")||die;
@@ -60,7 +90,7 @@ open(OUTKGR, ">", "KEGG_RXN_DB.txt")||die;
 #GET TCDB - CHEBI DATA
 $time=localtime;
 print "INPUT TRANSPORTER SUBSTRATES $time\n";
-while(<INTRCH>){
+while(<$INTRCH>){
         if($_!~/\w/){next;}
         $_=uc($_);
         $_=~s/[\n\r]+//;
@@ -146,18 +176,18 @@ foreach my $x (@KG_CPD){
         if($cpid !~ /C\d+/){next;}
 	$cpid =~ /(C\d+)/; $cpd=$1;
 	$CMPD_ALTS{$cpd}{$cpd}="KG";
-        $cpd_info = `wget -q -O - https://rest.kegg.jp/get/$cpid`;
-	$cpd_info = uc($cpd_info);
-	@lines=split("\n",$cpd_info);
 	$names=uc($names);
 	@names=split(";",$names);
 	foreach my $name (@names){ $name=CleanNames($name); 	 $CMPD_NAME{$cpd}{$name}="KG"; } 
-	foreach my $i (@lines){
+	my $fh = download_open("https://rest.kegg.jp/get/$cpid");
+	while (<$fh>) {
+                my $i=uc($_);
 		if($i=~/^FORMULA\s+(\S+)\;*/){	 $form=$1; 	 $CMPD_FORM{$cpd}=CleanNames($form);}
 		if($i=~/^EXACT_MASS\s+(\S+)\;*/){$mass=$1; 	 $CMPD_MASS{$cpd}=$mass;}
 		if($i=~/^\s+PUBCHEM\:\s+(\d+)/){ $alt="CID:".$1; $CMPD_ALTS{$cpd}{$alt}="KG"; }
 		if($i=~/^\s+CHEBI\:\s+(\d+)/){ $alt="CHEBI:".$1; $CMPD_ALTS{$cpd}{$alt}="KG"; }
 	}
+        close($fh);
 	#leaving the hmdb id code below - takes 4X as long so not using it ATM
 	#$hmid = `wget -q -O - https://www.genome.jp/dbget-bin/get_linkdb?-t+hmdb+$cpid`;
 	#if($hmid =~ /(HMDB\d+)/){ $alt=$1; while(length($alt)<11){$alt=~s/HMDB/HMDB0/;} $CMPD_ALTS{$cpd}{$alt}="KG"; }
@@ -237,13 +267,12 @@ foreach my $x (@KG_RXN){
         @stuff=split("\t",$x);
 	$rxid=$stuff[0];
         if($rxid !~ /R\d+/){next;}
-	$rxn_info = `wget -q -O - https://rest.kegg.jp/get/$rxid`;
-	$rxn_info = uc($rxn_info);
 	@LEFTS = ();
 	@RITES = ();
 	$rxn=''; $ec=''; $l=''; $r=''; $rhea='';
-	@lines=split("\n",$rxn_info);
-	foreach my $i (@lines){
+	my $fh = download_open("https://rest.kegg.jp/get/$rxid");
+        while (<$fh>) {
+                $i = uc($_);
 		if($i=~/^ENTRY\s+(R\d+)/){$rxn=$1;}
 		if($i=~/^EQUATION\s+(.*)\=(.*)$/){
 			$l=$1; $r=$2;
@@ -257,6 +286,7 @@ foreach my $x (@KG_RXN){
 		}
 		if($i=~/^DBLINKS\s+RHEA\:\s*(\d+)/){$rhea=$1; }
 	}
+        close($fh);
 	if($rxn !~/R\d+/){next;}
 	$RXN_ALTS{$rxn}{$rxn}="KG";
 	$RXN_ALTS{$rxn}{$rhea}="KG";
@@ -265,7 +295,7 @@ foreach my $x (@KG_RXN){
 	#get unprot from ec:
 	if(keys %{$EC2UPID{$ec}} < 1 && $ec=~/\d/){ #enzyme db didn't have upids, maybe kegg
 		@UPID=();
-		$ecup_info=`wget -q -O - https://www.genome.jp/dbget-bin/get_linkdb?-t+uniprot+ec:$ec`;
+                $ecup_info = download_str("https://www.genome.jp/dbget-bin/get_linkdb?-t+uniprot+ec:$ec");
 		if($ecup_info=~/No link information was found/i){next;}
 		@UPID=($ecup_info =~ /entry.up.(\w+)\"/ig);
 		foreach my $upid (@UPID){ 
