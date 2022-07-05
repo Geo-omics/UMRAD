@@ -1,4 +1,4 @@
-#use warnings;
+use warnings;
 use Sort::Naturally 'nsort';
 
 
@@ -133,9 +133,9 @@ foreach my $x (@EC_UP){
 }
 #distribute upids to oboletes
 foreach my $ec (keys %EC2UPID){
-	$alt = $EC2EC{$ec};
-	if($alt !~/\w/){next;}
-	foreach my $upid (keys %{$EC2UPID{$ec}}){ $EC2UPID{$alt}{$upid}=1;}
+    if (exists $EC2EC{$ec}) {
+        foreach my $upid (keys %{$EC2UPID{$ec}}){ $EC2UPID{$EC2EC{$ec}}{$upid}=1;}
+    }
 }
 undef(%EC2EC);
 ##################################################################################
@@ -201,12 +201,12 @@ $time=localtime;
 print "OUTPUT KEGG CPDS time $time\n";
 print OUTKGC "cpd\tformula\tmass\tcharge\tdb_src\ttcdbs\tnames\tkeggcpd\tchebcpd\thmdbcpd\tpubccpd\tinchcpd\tbioccpd\n";
 foreach my $cpd (sort(keys %CMPD_ALTS)){
-	$form=''; $char=''; $mass=''; $name='';
+	$name='';
 	$keggcpd='';   $chebcpd='';   $hmdbcpd='';
 	$pubccpd='';   $inchcpd='';   $bioccpd='';
-	$form=$CMPD_FORM{$cpd};
-	$char=$CMPD_CHAR{$cpd};
-	$mass=$CMPD_MASS{$cpd};
+	$form=$CMPD_FORM{$cpd} // '';
+	$char=$CMPD_CHAR{$cpd} // '';
+	$mass=$CMPD_MASS{$cpd} // '';
 	$sorc=$CMPD_ALTS{$cpd}{$cpd};
 
 	#FIX NAMES
@@ -217,17 +217,19 @@ foreach my $cpd (sort(keys %CMPD_ALTS)){
 
 	#sort identifiers by database CHECK EVERY ALT CPD FORMULA MATCHES
 	foreach my $alt (sort(keys %{$CMPD_ALTS{$cpd}})){
-		$alf=$CMPD_FORM{$alt};
-		if($alf ne $form && $alf=~/\w/){ #two formulas dont match, remove alt
-			   if($alt=~/^C\d+$/){		$keggcpd=~s/^$alt\;|\;$alt\;|\;$alt$|^$alt$//;}
-			elsif($alt=~/^CHEBI.\d+$/){	$chebcpd=~s/^$alt\;|\;$alt\;|\;$alt$|^$alt$//;}
-			elsif($alt=~/^HMDB\d+$/){	$hmdbcpd=~s/^$alt\;|\;$alt\;|\;$alt$|^$alt$//;}
-			elsif($alt=~/^CID.\d+$/){	$pubccpd=~s/^$alt\;|\;$alt\;|\;$alt$|^$alt$//;}
-			elsif($alt=~/^INCHI.\S+$/){	$inchcpd=~s/^$alt\;|\;$alt\;|\;$alt$|^$alt$//;}
-			else{				$bioccpd=~s/^$alt\;|\;$alt\;|\;$alt$|^$alt$//;}
-			delete($CMPD_ALTS{$cpd}{$alt}); 
-			next;
-		}
+                if (exists $CMPD_FORM{$alt}) {
+                    $alf=$CMPD_FORM{$alt};
+                    if($alf ne $form && $alf=~/\w/){ #two formulas dont match, remove alt
+                               if($alt=~/^C\d+$/){		$keggcpd=~s/^$alt\;|\;$alt\;|\;$alt$|^$alt$//;}
+                            elsif($alt=~/^CHEBI.\d+$/){	$chebcpd=~s/^$alt\;|\;$alt\;|\;$alt$|^$alt$//;}
+                            elsif($alt=~/^HMDB\d+$/){	$hmdbcpd=~s/^$alt\;|\;$alt\;|\;$alt$|^$alt$//;}
+                            elsif($alt=~/^CID.\d+$/){	$pubccpd=~s/^$alt\;|\;$alt\;|\;$alt$|^$alt$//;}
+                            elsif($alt=~/^INCHI.\S+$/){	$inchcpd=~s/^$alt\;|\;$alt\;|\;$alt$|^$alt$//;}
+                            else{				$bioccpd=~s/^$alt\;|\;$alt\;|\;$alt$|^$alt$//;}
+                            delete($CMPD_ALTS{$cpd}{$alt});
+                            next;
+                    }
+                }
 		   if($alt=~/^C\d+$/){		if($keggcpd!~/$alt/){$keggcpd.=$alt.";"; }}
 		elsif($alt=~/^CHEBI.\d+$/){	if($chebcpd!~/$alt/){$chebcpd.=$alt.";"; }}
 		elsif($alt=~/^HMDB\d+$/){	if($hmdbcpd!~/$alt/){$hmdbcpd.=$alt.";"; }}
@@ -282,7 +284,7 @@ foreach my $x (@KG_RXN){
 		if($i=~/^ENZYME\s+(\d+\.\d+\.\d+\.N*\d+)/){
 			@ES = ($i=~/(\d+\.\d+\.\d+\.N*\d+)/g);    #keep the first one with UPIDS
 			foreach my $ex (@ES){ if(exists($EC2UPID{$ex})){$RXN_EC{$rxn}{$ex}="KG"; $ec=$ex; last;}}
-			if($ec !~/\w/){$ec=$ECS[0];}
+			if($ec !~/\w/) { $ec=''; }  # NOTE: was $ec=$ECS[0] which will undefine $ec. What was the intention? (Robert)
 		}
 		if($i=~/^DBLINKS\s+RHEA\:\s*(\d+)/){$rhea=$1; }
 	}
@@ -293,7 +295,7 @@ foreach my $x (@KG_RXN){
         $RXN_DIR{$rxn}="LTR";
 
 	#get unprot from ec:
-	if(keys %{$EC2UPID{$ec}} < 1 && $ec=~/\d/){ #enzyme db didn't have upids, maybe kegg
+	if($ec ne '' && keys %{$EC2UPID{$ec}} < 1 && $ec=~/\d/){ #enzyme db didn't have upids, maybe kegg
 		@UPID=();
                 $ecup_info = download_str("https://www.genome.jp/dbget-bin/get_linkdb?-t+uniprot+ec:$ec");
 		if($ecup_info=~/No link information was found/i){next;}
@@ -303,7 +305,7 @@ foreach my $x (@KG_RXN){
 			$UPID_RXN{$upid}{$rxn}="KG"; 
 		}
 	}
-	elsif(keys %{$EC2UPID{$ec}} >= 1 && $ec=~/\d/){
+	elsif($ec ne '' && keys %{$EC2UPID{$ec}} >= 1 && $ec=~/\d/){
 		foreach my $upid (keys %{$EC2UPID{$ec}}){ 
 		$RXN_UPID{$rxn}{$upid}="KG";
 		$UPID_RXN{$upid}{$rxn}="KG";}}
@@ -350,7 +352,7 @@ foreach my $rxn (sort(keys %RXN_ALTS)){
 
         foreach my $cpd (sort(keys %{$LRXN_CPD{$rxn}})){
                 if($cpd !~/\w/){next;}
-                if($TRANS_RXN{$rxn}{$cpd}=~/PORT/){ $tdir=$TRANS_RXN{$rxn}{$cpd};} else{$tdir="NOPORT";} #import/export/biport/noport
+                if(exists $TRANS_RXN{$rxn} && $TRANS_RXN{$rxn}{$cpd}=~/PORT/){ $tdir=$TRANS_RXN{$rxn}{$cpd};} else{$tdir="NOPORT";} #import/export/biport/noport
                 if( $LRXN_CPD{$rxn}{$cpd}=~/SIDE/){ $tloc=$LRXN_CPD{$rxn}{$cpd};}  else{$tloc="INSIDE";} #inside or outside
                 foreach my $alt (sort(keys %{$CMPD_ALTS{$cpd}})){
                   #put in a clean namess sub for cpds - also why duplicate compounds? with hash how?
@@ -363,7 +365,7 @@ foreach my $rxn (sort(keys %RXN_ALTS)){
         }
         foreach my $cpd (sort(keys %{$RRXN_CPD{$rxn}})){
                 if($cpd !~/\w/){next;}
-                if($TRANS_RXN{$rxn}{$cpd}=~/PORT/){ $tdir=$TRANS_RXN{$rxn}{$cpd};} else{$tdir="NOPORT";} #import/export/biport/noport
+                if(exists $TRANS_RXN{$rxn} && $TRANS_RXN{$rxn}{$cpd}=~/PORT/){ $tdir=$TRANS_RXN{$rxn}{$cpd};} else{$tdir="NOPORT";} #import/export/biport/noport
                 if( $RRXN_CPD{$rxn}{$cpd}=~/SIDE/){ $tloc=$RRXN_CPD{$rxn}{$cpd}; } else{$tloc="INSIDE";} #inside or outside
                 foreach my $alt (sort(keys %{$CMPD_ALTS{$cpd}})){
                            if($alt=~/^INCHI\:\w+|^HMDB\d+|^CID\:\d+/){next;}
@@ -381,7 +383,7 @@ foreach my $rxn (sort(keys %RXN_ALTS)){
         $rhea_rloc=join(";",@rhea_rloc);  $kegg_rloc=join(";",@kegg_rloc);  $bioc_rloc=join(";",@bioc_rloc);
         $rhea_rtrn=join(";",@rhea_rtrn);  $kegg_rtrn=join(";",@kegg_rtrn);  $bioc_rtrn=join(";",@bioc_rtrn);
 
-        %ECS=(); %UPIDS=(); @UPIDS=(); $ec=''; $ex='';
+        %ECS=(); %UPIDS=(); @UPIDS=(); $ec='';
         foreach my $ec   (keys %{$RXN_EC{$rxn}}){       $ECS{$ec}++;
           foreach my $upid (keys %{$EC2UPID{$ec}}){     $UPIDS{$upid}++;}}
         foreach my $upid (keys %{$RXN_UPID{$rxn}}){     $UPIDS{$upid}++;}
@@ -408,7 +410,7 @@ foreach my $rxn (sort(keys %RXN_ALTS)){
 	print OUTKGR "$out\n";
 }
 undef(%CMPD_ALTS); undef(%CMPD_CHAR); undef(%CMPD_FORM); undef(%CMPD_MASS); undef(%CMPD_NAME); 
-undef(%LRXN_CPD);  undef(%RRXN_CPD);  undef(%TRANS_CPD); undef(%LCPD_RXN);  undef(%RCPD_RXN);  undef(%TRANS_RXN); 
+undef(%LRXN_CPD);  undef(%RRXN_CPD);  undef(%LCPD_RXN);  undef(%RCPD_RXN);  undef(%TRANS_RXN);
 undef(%RXN_ALTS);  undef(%RXN_DIR);   undef(%RXN_EC); undef(%UPID_RXN); undef(%RXN_UPID);
 ###################################################################################
 ##############     DONE INPUT KEGG  REACTIONS   ####################
@@ -454,8 +456,6 @@ undef(%RXN_ALTS);  undef(%RXN_DIR);   undef(%RXN_EC); undef(%UPID_RXN); undef(%R
 #print "rxn info rdir $rdir ralt $ralt lcpd $lcpd rcpd $rcpd trrxn $trrxn upid $upid ec $ec\n";
 
  
-
-
 #FIX LOWQUAL CPD NAMES
 sub CleanNames{
 @GREEKS = ("α","β","γ","δ","ε","ζ","η","θ","ι","κ","λ","μ","ν","ξ","ο","π","ρ","ς","σ","τ","υ","φ","χ","ψ","ω");
@@ -521,9 +521,8 @@ sub BestName{
 		if($alt!~/[A-Z]{7,}/){$alt=$name; $alt=~s/[\W\_]+/\_/g;} #name too short after remove junk
 	       	@PARTS = split("\_", $alt);
 	       	$mp=0;
-	       	foreach $p (@PARTS){ 
-			$p=~/([A-Z]+)/; 
-			if(length($1)>$mp){ $mp=length($1); } 
+        foreach (@PARTS){
+		    if (/([A-Z]+)/ and length($1) > $mp) { $mp = length($1); }
 		}
 		#$skip=0; foreach my $an (keys %LEN){if($an =~ /$alt/ && $an ne $alt){ $skip=1; last;}}
 		#if($skip==1){next;}
@@ -554,7 +553,7 @@ sub BestName{
 			if($name=~/$NAMES[$i]/){$do=0; $NAMES[$i]=$name; last;} #the name contains a prior name, replace with name-longer
 		}
 		if($do==1){push(@NAMES,$name);} 				#no name containment
- 		if($NAMES[9]=~/\w/){last;}					#limit to 10 good names
+                if(defined $NAMES[9] and $NAMES[9]=~/\w/){last;}		#limit to 10 good names
 	}
 	foreach my $name (sort{ $ODD{$a}<=>$ODD{$b} || $LEN{$b}<=>$LEN{$a} } keys %LONG){
 		$do=1;
@@ -563,7 +562,7 @@ sub BestName{
 			if($name=~/$NAMES[$i]/){$do=0; $NAMES[$i]=$name; last;} #the name contains a prior name, replace with name-longer
 		}
 		if($do==1){push(@NAMES,$name);} 				#no name containment 
-		if($NAMES[10]=~/\w/){last;} 					#if 10 "good" names use only 1 long
+		if(defined $NAMES[10] and $NAMES[10]=~/\w/){last;} 		#if 10 "good" names use only 1 long
 	}
 	foreach my $name (sort{ $ODD{$a}<=>$ODD{$b} || $LEN{$b}<=>$LEN{$a} } keys %SHORT){
 		$do=1;
@@ -572,7 +571,7 @@ sub BestName{
 			if($name=~/$NAMES[$i]/){$do=0; $NAMES[$i]=$name; last;} #the name contains a prior name, replace with name-longer
 		}
 		if($do==1){push(@NAMES,$name);} 				#no name containment 
-		if($NAMES[11]=~/\w/){last;}                                      #if 10 "good" and 1 long names use only 1 short
+		if(exists $NAMES[11] and $NAMES[11]=~/\w/){last;}               #if 10 "good" and 1 long names use only 1 short
 	}
 	@NAMES=nsort(@NAMES);
        	return(@NAMES);
