@@ -171,44 +171,56 @@ print "DONE $on lines\n";
 ##############################################################
 #GET PROT LENGTH AND ODD AA DISTs
 $on=0; $time = localtime; 
-$/=">";
 print "GET PROT LEN AND ODD AA STATS $time\n";
 open(INURFA, "unpigz -c $urfa |") || die "failed to open $urfa";
+my $ur100; @seq = ();
 while(<INURFA>){
-        if($_!~/\w/){next;}
-        $_=uc($_);
-        @stuff=split("\n",$_);
-        $header = shift(@stuff);
-	$header =~ /(UNIREF100\_\S+)\s+(.*?)\s+N\=\d.*TAXID\=(\d+)/;
-        $ur100=$1;    
-	$name = CleanNames($2);
-	$tid = $3;
-
-        if($ur100 !~ /\_UPI\d/){next;}
-
-
-	$UR100_INFO{$ur100}{7}{$tid}++;
-        $seq = join("",@stuff);
-        $seq =~ s/[^A-Z]//g;
+    $_ = uc;
+    if (/^>/) {
+        # finish current record
+        $seq = join("",@seq);
         $len = length($seq);
-        if($len < 10){next;}
-        $UR100_LEN{$ur100}=$len;
-	$UR100_NAME{$ur100}=$name;
-        @AA=();
-        for my $i (A..Z){
-                my $count = () = $seq =~ /$i/g;
-                $per=$count*100/$len;
-                $per=~s/\..*//;
-                if($per >= 10){$aa=$i.":".$per; push(@AA,$aa);}
+        if($len < 10) {
+            # first line or seq too short, don't store any of this
+        } else {
+            $UR100_INFO{$ur100}{7}{$tid}++;
+            $UR100_LEN{$ur100}=$len;
+            $UR100_NAME{$ur100}=$name;
+            #@AA=();
+            #for my $i (A..Z){
+            #    my $count = () = $seq =~ /$i/g;
+            #    $per=$count*100/$len;
+            #    $per=~s/\..*//;
+            #    if($per >= 10){$aa=$i.":".$per; push(@AA,$aa);}
+            #}
+            #$odd=join("|",@AA);
+            #if($odd=~/[A-Z]/){ $UR100_NAME{$ur100} .= ";".$odd; }
+            if($on%10000000==0){$time=localtime; print "on $on time $time ur100 $ur100 odd $odd len $len tid $tid name $UR100_NAME{$ur100}\n";} $on++;
+            #if($on>10000000){last;}#!!!!
         }
-        $odd=join("|",@AA);
-        if($odd=~/[A-Z]/){ $UR100_NAME{$ur100}.= ";".$odd; }
-        if($on%1000000==0){$time=localtime; print "on $on time $time ur100 $ur100 odd $odd len $len tid $tid name $UR100_NAME{$ur100}\n";} $on++;
-	if($on>1000000){last;}#!!!!
-}
-$/="\n";
 
+        # start new record
+        m/(UNIREF100\_\S+)\s+(.*?)\s+N\=\d.*TAXID\=(\d+|N\/A)/ or die "failed parsing fasta header: $_";
+        $ur100=$1;
+        # $name = CleanNames($2);
+        $name = $2;
+        $tid = $3;
+        @seq = ();
+    } else {
+        # collect sequence
+        s/[\r\n]+$//;
+        push(@seq, $_);
+    }
+}
 close INURFA;
+# finish final record (if any)
+$seq = join("",@seq);
+$len = length($seq);
+if($ur100 and $len >= 10) {
+    $UR100_INFO{$ur100}{7}{$tid}++;
+    $UR100_LEN{$ur100}=$len;
+    $UR100_NAME{$ur100}=$name;
+}
 print "DONE $on lines\n";
 
 #LOAD IDMAP
