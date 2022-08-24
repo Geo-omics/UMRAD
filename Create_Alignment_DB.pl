@@ -53,8 +53,10 @@ while(<INTRCH>){
         $chebi=join(";",@CHEBS);
         $TCDB_CPDS{$tcdb}=$chebi;
 	#print "chebi $chebi tcdb $tcdb\n";
+	if($on%1000000==0){$time=localtime; print "on $on $time tcdb $tcdb chebi $chebi\n";} $on++;
 }
 close INTRCH;
+print "DONE $on lines\n";
 
 #INPUT TCDB ALIGNMENTS
 $time=localtime; $on=0;
@@ -88,10 +90,11 @@ while(<INTCDB>){
 			else{}
 	}	}
 
-	if($on%100000==0){$time=localtime; print "on $on tcdb $tcdb ur100 $ur100 sco $sco hascpd $HASCPD{$ur100}\n";} $on++;
+	if($on%1000000==0){$time=localtime; print "on $on time $time tcdb $tcdb ur100 $ur100 sco $sco hascpd $HASCPD{$ur100}\n";} $on++;
 	#if($on>10000){last;} #!!!!
 }
 close INTCDB;
+print "DONE $on lines\n";
 undef(%HASCPD);
 undef(%UR100_TCDB_SCO);
 undef(%TCDB_CPDS);
@@ -119,6 +122,7 @@ while(<INKEGN>){
 	#if($on>100000){last;}#!!!!
 }
 close INKEGN;
+print "DONE $on lines\n";
 
 #LOAD BIOCYC MONOMERS
 $time=localtime; $on=0;
@@ -130,15 +134,17 @@ while(<INBMON>){
         $_=~s/[\r\n]+//;
         (my $mono, my $rxn)=split("\t",$_);
 	$MONO_BRXN{$mono}{$rxn}++;
-        if($on%1000000==0){$time=localtime;
+        if($on%10000000==0){$time=localtime;
                 print "on $on time $time mono $mono rxn $rxn cnt $MONO_BRXN{$mono}{$rxn}\n";
         } $on++;
 	#if($on>100000){last;}#!!!!
 }
 close INBMON;
+print "DONE $on lines\n";
 
 #GET FUNCTION NAMES
-print "input $infn\n";
+$time=localtime; $on=0;
+print "INPUT $infn $time\n";
 open(INFN, $infn) || die "failed to open $infn";
 while(<INFN>){
 	if($_ !~ /\w/){next;}
@@ -147,9 +153,12 @@ while(<INFN>){
 	(my $id, my $name)=split("\t",$_,-1);
 	$id=~s/\s//g;
 	$FUNC_NAMES{$id}=$name;
-	#print "id $id name $name\n";
+        if($on%10000==0){$time=localtime;
+		print "on $on time $time id $id name $name\n";
+        } $on++;
 }
 close(INFN);
+print "DONE $on lines\n";
 ##############################################################
 ##############################################################
 
@@ -200,11 +209,12 @@ while(<INURFA>){
 $/="\n";
 
 close INURFA;
+print "DONE $on lines\n";
 
 #LOAD IDMAP
 $on=0; $time=localtime;
 print "INPUT UNIREF TO UNIPROT MAPPING $time\n";
-$on=0; $upid=''; $ur100=''; $ur90=''; @KEGG=(); $tid='';
+$upid=''; $ur100=''; $ur90=''; @KEGG=(); $tid='';
 open(INMAP,  "unpigz -c $inidm |") || die "failed opening $inidm";
 while(<INMAP>){
         if($_!~/\w/){next;}
@@ -241,12 +251,14 @@ while(<INMAP>){
 	$on++;
 }
 close INMAP;
+print "DONE $on (non-skipped) lines\n";
 
 
 
 #INPUT UNIPARC FUNCTIONS
-print "INPUT UNIPARC\n";
 $inacc=0;
+$on=0; $time=localtime;
+print "INPUT UNIPARC $time\n";
 open(INPAR,  "unpigz -c $inpar |") || die "failed to open $inpar";
 while(<INPAR>){
         if($_!~/\w/){next;}
@@ -281,6 +293,7 @@ while(<INPAR>){
 	if($on>1000000){last;}#!!!!
 }        }
 close INPAR;
+print "DONE $on (non-skipped) lines\n";
 ##############################################################
 ##############################################################
 
@@ -291,7 +304,7 @@ close INPAR;
 ##############################################################
 #LOAD UPID AND EC -> RXNS
 #RHEA
-$time=localtime; 
+$on=0; $time=localtime;
 print "INPUT RHEA RXN $time\n";
 open(INRHRX, $inrhrx) || die "failed to open $inrhrx";
 while(<INRHRX>){
@@ -308,8 +321,9 @@ while(<INRHRX>){
 	if($on%1000000==0){ print "rrxn $rxn ec $ec upid $upid\n"; } $on++;
 }
 close INRHRX;
+print "DONE $on lines\n";
 #KEGG
-$time=localtime; 
+$on=0; $time=localtime;
 print "INPUT KEGG RXN $time\n";
 open(INKGRX, $inkgrx) || die "failed to open $inkgrx";
 while(<INKGRX>){
@@ -325,8 +339,9 @@ while(<INKGRX>){
 	if($on%1000000==0){ print "krxn $rxn ec $ec upid $upid\n"; } $on++;
 }
 close INKGRX;
+print "DONE $on lines\n";
 #BIOCYC
-$time=localtime; 
+$on=0; $time=localtime;
 print "INPUT BIOCYC RXN $time\n";
 open(INBCRX, $inbcrx) || die "failed to open $inbcrx";
 while(<INBCRX>){
@@ -342,6 +357,7 @@ while(<INBCRX>){
 	if($on%1000000==0){ print "bioc $rxn ec $ec upid $upid\n"; } $on++;
 }
 close INBCRX;
+print "DONE $on lines\n";
 ##############################################################
 ##############################################################
 
@@ -350,8 +366,7 @@ close INBCRX;
 ##############################################################
 ##### 		INPUT / OUTPUT UNIPROT DOWNLOAD		######
 ##############################################################
-$on=0;
-$time = localtime;
+$on=0; $time=localtime;
 print "INPUT UNIPROT $time\n";
 print OUTPINT "UP-ID\tUR100\tUR90\tName\tLength\t";
 print OUTPINT "SigPep\tTMS\tDNA\tTaxonId\tMetal\tLoc\t";
@@ -509,7 +524,7 @@ while(<INUP>){
 	#output cleaned uniprot
 	$out=join("\t",@FIN);
 	print OUTPINT "$upid\t$out\n";
-	if($on%1000000==0){$time=localtime; print "on $on time $time out upids, skipped $skipee\n"; } $on++;
+	if($on%10000000==0){$time=localtime; print "on $on time $time out upids, skipped $skipee\n"; } $on++;
 }
 close INUP;
 undef(%EC_RRXN);
@@ -529,13 +544,13 @@ print "final on $on uniprots\n";
 
 
 #COMPILE AND OUTPUT UNIREF
-print "OUTPUT UNIREF100\n";
+$on=0; $time=localtime;
+print "OUTPUT UNIREF100 $time\n";
 #go thru all UniRef100s
 print OUTREF "UR100\tUR90\tName\tLength\t";
 print OUTREF "SigPep\tTMS\tDNA\tTaxonId\tMetal\tLoc\t";
 print OUTREF "TCDB\tCOG\tPfam\tTigr\tGene_Ont\tInterPro\tECs\t";
 print OUTREF "kegg\trhea\tbiocyc\n";
-$on=0;
 foreach my $ur100 (keys %UR100_LEN){
 	@OUT=();
 	$OUT[0]=$ur100;
@@ -569,6 +584,7 @@ foreach my $ur100 (keys %UR100_LEN){
 	if($on%1000000==0){$time=localtime; print "on $on time $time ur100 $ur100 name $OUT[2]\n";} $on++;
 	delete($UR100_INFO{$ur100});
 }
+print "DONE $on lines\n";
 undef(%UR100_LEN);
 undef(%UR100_NAME);
 undef(%UR100_INFO);
