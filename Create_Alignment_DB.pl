@@ -6,17 +6,18 @@ use Sort::Naturally 'nsort';
 ##############################################################
 #OPEN FILES - CHECK
 ##############################################################
-$inidm  = 'idmapping.dat.gz';		open(INMAP,  "gunzip -c $inidm |")||die "1 no $inidm  - please place into this folder and restart\n"; 
-$inup  	= 'uniprot-all.tab.gz';		open(INUP,   "gunzip -c $inup |") ||die "2 no $inup   - please place into this folder and restart\n"; 
-$inpar	= 'uniparc_all.xml.gz';		open(INPAR,  "gunzip -c $inpar |") ||die "3 no $inpar   - please place into this folder and restart\n";
-$inkegn	= 'KEGG_GENES_RXN.txt';		open(INKEGN, $inkegn)||die "3 no $inkegn - please place into this folder and restart\n";
-$inbmon	= 'BIOCYC_MONO_RXNS.txt';	open(INBMON, $inbmon)||die "4 no $inbmon - please place into this folder and restart\n"; 
-$inrhrx	= 'RHEA_RXN_DB.txt';		open(INRHRX, $inrhrx)||die "5 no $inrhrx - please place into this folder and restart\n"; 
-$inkgrx = 'KEGG_RXN_DB.txt';		open(INKGRX, $inkgrx)||die "6 no $inkgrx - please place into this folder and restart\n"; 
-$inbcrx	= 'BIOCYC_RXN_DB.txt';		open(INBCRX, $inbcrx)||die "7 no $inbcrx - please place into this folder and restart\n"; 
-$intcdb	= 'UR100vsTCDB.m8';		open(INTCDB, $intcdb)||die "8 no $intcdb - please place into this folder and restart\n"; 
-$intrch	= 'getSubstrates.py';		open(INTRCH, $intrch)||die "9 no $intrch - please place into this folder and restart\n"; 
-$infn	= 'Function_Names.txt';		open(INFN,   $infn)  ||die "10 no $infn - please place into this folder and restart\n";
+$inidm  = 'idmapping.dat.gz';		-e $inidm  || die "1 no $inidm  - please place into this folder and restart\n";
+$inup  	= 'uniprot-all.tab.gz';		-e $inup   || die "2 no $inup   - please place into this folder and restart\n";
+$inpar	= 'uniparc_all.xml.gz';		-e $inpar  || die "3 no $inpar   - please place into this folder and restart\n";
+$urfa	= 'uniref100.fasta.gz';         -e $urfa   || die "4 no $urfa   - please place into this folder and restart\n";
+$inkegn	= 'KEGG_GENES_RXN.txt';		-e $inkegn || die "5 no $inkegn - please place into this folder and restart\n";
+$inbmon	= 'BIOCYC_MONO_RXNS.txt';	-e $inbmon || die "6 no $inbmon - please place into this folder and restart\n";
+$inrhrx	= 'RHEA_RXN_DB.txt';		-e $inrhrx || die "7 no $inrhrx - please place into this folder and restart\n";
+$inkgrx = 'KEGG_RXN_DB.txt';		-e $inkgrx || die "8 no $inkgrx - please place into this folder and restart\n";
+$inbcrx	= 'BIOCYC_RXN_DB.txt';		-e $inbcrx || die "9 no $inbcrx - please place into this folder and restart\n";
+$intcdb	= 'UR100vsTCDB.m8';		-e $intcdb || die "10 no $intcdb - please place into this folder and restart\n";
+$intrch	= 'getSubstrates.py';		-e $intrch || die "11 no $intrch - please place into this folder and restart\n";
+$infn	= 'Function_Names.txt';		-e $infn   || die "12 no $infn - please place into this folder and restart\n";
 
 
 #output
@@ -40,6 +41,7 @@ open(OUTREF, ">", "OUT_UNIREFtest.txt")||die;
 # - previous used as left/right cpds - compile from RXN_DB chebi
 $time=localtime; $on=0;
 print "INPUT TRANSPORTER SUBSTRATES $time\n";
+open(INTRCH, $intrch) || die "failed to open $intrch";
 while(<INTRCH>){
         if($_!~/\w/){next;}
         $_=uc($_);
@@ -52,10 +54,12 @@ while(<INTRCH>){
         $TCDB_CPDS{$tcdb}=$chebi;
 	#print "chebi $chebi tcdb $tcdb\n";
 }
+close INTRCH;
 
 #INPUT TCDB ALIGNMENTS
 $time=localtime; $on=0;
 print "INPUT UNIREF100 vs TCDB MATCHES $time\n";
+open(INTCDB, $intcdb) || die "failed to open $intcdb";
 while(<INTCDB>){
         if($_ !~ /\w/){next;}
         $_=uc($_);
@@ -87,6 +91,7 @@ while(<INTCDB>){
 	if($on%100000==0){$time=localtime; print "on $on tcdb $tcdb ur100 $ur100 sco $sco hascpd $HASCPD{$ur100}\n";} $on++;
 	#if($on>10000){last;} #!!!!
 }
+close INTCDB;
 undef(%HASCPD);
 undef(%UR100_TCDB_SCO);
 undef(%TCDB_CPDS);
@@ -101,6 +106,7 @@ undef(%TCDB_CPDS);
 #LOAD KEGG GENES
 $time=localtime; $on=0;
 print "INPUT KEGG GENES $time\n";
+open(INKEGN, $inkegn) || die "failed to open $inkegn";
 while(<INKEGN>){
         if($_!~/\w/){next;}
         $_=uc($_);
@@ -112,10 +118,12 @@ while(<INKEGN>){
         } $on++;
 	#if($on>100000){last;}#!!!!
 }
+close INKEGN;
 
 #LOAD BIOCYC MONOMERS
 $time=localtime; $on=0;
 print "INPUT MONOMERS $time\n";
+open(INBMON, $inbmon) || die "failed to open $inbmon";
 while(<INBMON>){
         if($_!~/\w/){next;}
         $_=uc($_);
@@ -127,9 +135,11 @@ while(<INBMON>){
         } $on++;
 	#if($on>100000){last;}#!!!!
 }
+close INBMON;
 
 #GET FUNCTION NAMES
 print "input $infn\n";
+open(INFN, $infn) || die "failed to open $infn";
 while(<INFN>){
 	if($_ !~ /\w/){next;}
 	$_=uc($_);
@@ -154,7 +164,7 @@ close(INFN);
 $on=0; $time = localtime; 
 $/=">";
 print "GET PROT LEN AND ODD AA STATS $time\n";
-open(INURFA, "gunzip -c uniref100.fasta.gz |")||die;
+open(INURFA, "unpigz -c $urfa |") || die "failed to open $urfa";
 while(<INURFA>){
         if($_!~/\w/){next;}
         $_=uc($_);
@@ -189,11 +199,13 @@ while(<INURFA>){
 }
 $/="\n";
 
+close INURFA;
 
 #LOAD IDMAP
 $on=0; $time=localtime;
 print "INPUT UNIREF TO UNIPROT MAPPING $time\n";
 $on=0; $upid=''; $ur100=''; $ur90=''; @KEGG=(); $tid='';
+open(INMAP,  "unpigz -c $inidm |") || die "failed opening $inidm";
 while(<INMAP>){
         if($_!~/\w/){next;}
         $_=uc($_);
@@ -228,12 +240,14 @@ while(<INMAP>){
 	if($on>1000000){last;}#!!!!
 	$on++;
 }
+close INMAP;
 
 
 
 #INPUT UNIPARC FUNCTIONS
 print "INPUT UNIPARC\n";
 $inacc=0;
+open(INPAR,  "unpigz -c $inpar |") || die "failed to open $inpar";
 while(<INPAR>){
         if($_!~/\w/){next;}
         $_=uc($_);
@@ -266,6 +280,7 @@ while(<INPAR>){
                 @PFAM=(); @TIGR=(); @IPR=(); $upid=''; $ur100=''; $ur90='';
 	if($on>1000000){last;}#!!!!
 }        }
+close INPAR;
 ##############################################################
 ##############################################################
 
@@ -278,6 +293,7 @@ while(<INPAR>){
 #RHEA
 $time=localtime; 
 print "INPUT RHEA RXN $time\n";
+open(INRHRX, $inrhrx) || die "failed to open $inrhrx";
 while(<INRHRX>){
         if($_!~/\w/){next;}
         $_=uc($_);
@@ -291,9 +307,11 @@ while(<INRHRX>){
 	if($upid=~/\w/){    $UPID_RRXN{$upid}{$rxn}++; }
 	if($on%1000000==0){ print "rrxn $rxn ec $ec upid $upid\n"; } $on++;
 }
+close INRHRX;
 #KEGG
 $time=localtime; 
 print "INPUT KEGG RXN $time\n";
+open(INKGRX, $inkgrx) || die "failed to open $inkgrx";
 while(<INKGRX>){
         if($_!~/\w/){next;}
         $_=uc($_);
@@ -306,9 +324,11 @@ while(<INKGRX>){
 	if($upid=~/\w/){    $UPID_KRXN{$upid}{$rxn}++; }
 	if($on%1000000==0){ print "krxn $rxn ec $ec upid $upid\n"; } $on++;
 }
+close INKGRX;
 #BIOCYC
 $time=localtime; 
 print "INPUT BIOCYC RXN $time\n";
+open(INBCRX, $inbcrx) || die "failed to open $inbcrx";
 while(<INBCRX>){
         if($_!~/\w/){next;}
         $_=uc($_);
@@ -321,6 +341,7 @@ while(<INBCRX>){
 	if($upid=~/\w/){    $UPID_BRXN{$upid}{$rxn}++; }
 	if($on%1000000==0){ print "bioc $rxn ec $ec upid $upid\n"; } $on++;
 }
+close INBCRX;
 ##############################################################
 ##############################################################
 
@@ -336,6 +357,7 @@ print OUTPINT "UP-ID\tUR100\tUR90\tName\tLength\t";
 print OUTPINT "SigPep\tTMS\tDNA\tTaxonId\tMetal\tLoc\t";
 print OUTPINT "TCDB\tCOG\tPfam\tTigr\tGene_Ont\tInterPro\tECs\t";
 print OUTPINT "kegg\trhea\tbiocyc\n";
+open(INUP, "unpigz -c $inup |") || die "failed to open $inup";
 while(<INUP>){
 	if($_!~/\w/){next;}
 	$_=uc($_);
@@ -489,6 +511,7 @@ while(<INUP>){
 	print OUTPINT "$upid\t$out\n";
 	if($on%1000000==0){$time=localtime; print "on $on time $time out upids, skipped $skipee\n"; } $on++;
 }
+close INUP;
 undef(%EC_RRXN);
 undef(%UPID_RRXN);
 undef(%EC_KRXN);
