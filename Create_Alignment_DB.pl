@@ -234,33 +234,30 @@ while(<INMAP>){
         $_=~s/[\r\n]+//;
 
 	(my $prot, my $type, my $id)=split("\t",$_); 
-
-	if($prot !~ /^UPI\d/){next;}
-
 	if($upid eq ''){$upid = $prot; $ur100=''; $ur90=''; @KEGG=(); $tid='';}
-
 	if($prot eq $upid){ 
-		   if($type eq "UNIREF100"){ 	$ur100=$id;}
+		   if($type eq "UNIREF100"){ 	$ur100=$id; }
         	elsif($type eq "UNIREF90"){  	$ur90=$id; }
 		elsif($type eq "NCBI_TAXID"){	$tid=$id; }
-		elsif($type eq "KEGG"){ 	foreach my $k (keys %{$KGEN_KRXN{$id}}){ push(@KEGG,$k);}}
-		else{next;}
+		elsif($type eq "KEGG"){foreach my $k (keys %{$KGEN_KRXN{$id}}){ push(@KEGG,$k);}}
+		else{}
 	}
-	else{	if($ur100 !~/UNIREF100/ || !exists($UR100_LEN{$ur100})){$upid = ''; next;}
-		$UR100_UR90{$ur100}=$ur90;
+	else{	#reached the next protein, set current data and reset
+		if($ur100 !~/UNIREF100/){$upid = ''; next;}
+		if($ur90 =~ /UNIREF90/){$UR100_UR90{$ur100}=$ur90;}
 		$UPID_UR100{$upid}=$ur100;
-		foreach my $k (@KEGG){ if($k=~/^R\d+$/){ $UR100_INFO{$ur100}{17}{$k}++; $UR90_INFO{$ur90}{17}{$k}++;}}
+		foreach my $k (@KEGG){ if($k=~/^R\d+$/){ $UR100_INFO{$ur100}{17}{$k}++; $UR90_INFO{$ur90}{17}{$k}++; }}
 		if($tid=~/^\d+$/){$UR100_INFO{$ur100}{7}{$tid}++;}
-		$upid =''; next;
+                if($on%10000000==0){ $time=localtime;
+                    $totupid = keys %UPID_UR100;
+                    $totur1  = keys %UR100_UR90;
+                    $time = localtime;
+                    print "on $on time $time type $type upid $upid prot $prot ur100 $ur100 ur90 $ur90 id $id upid_ur100 $totupid UR100_UR90 $totur1\n";
+                }
+		$on++;
+		$upid='';
 	}
-        if($on%1000000==0){ $time=localtime;
-                $totupid = keys %UPID_UR100;
-                $totur1  = keys %UR100_UR90;
-                print "on $on time $time type $type upid $upid upid_ur100 $totupid UR100_UR90 $totur1\n"; 
-		print "on $on time $time id $id tid $tid ur100 $ur100 ur90 $UR100_UR90{$ur100} kegg @KEGG\n";
-        }
-	if($on>1000000){last;}#!!!!
-	$on++;
+	#if($on>1000000){last;}#!!!!
 }
 close INMAP;
 print "DONE $on (non-skipped) lines\n";
@@ -278,32 +275,27 @@ while(<INPAR>){
         $_=~s/[\r\n]+//;
         if($_ =~ /ENTRY.DATASET/){$inacc=1; @PFAM=(); @TIGR=(); @IPR=(); $upid=''; $ur100=''; $ur90='';}
         if($inacc==1){
-                   if($_=~/\<ACCESSION\>([\w+\-]+)\<\//){ 
-			$upid=$1;         
-
-			if($upid !~ /^UPI\d/){$inacc=0; next;} #!!!!
-
-			$ur100="UNIREF100_".$upid; $ur90=$UR100_UR90{$ur100}; 
-			if($ur90 !~ /\w/){ $ur90="UNIREF90_".$upid; 
-				if(!exists($UR90_INFO{$ur90})){$inacc=0; @PFAM=(); @TIGR=(); @IPR=(); next;}}
-                        if(!exists($UR100_LEN{$ur100})){$inacc=0; @PFAM=(); @TIGR=(); @IPR=(); next;}
-			#print "upid $upid ur100 $ur100 ur90 $ur90\n";
-		}
-                elsif($_=~/\<SIGNATURESEQUENCEMATCH.DATABASE..PFAM..ID..(PF\d+)/){       push(@PFAM,$1); }
-                elsif($_=~/\<SIGNATURESEQUENCEMATCH.DATABASE..TIGRFAMS..ID..(TIGR\d+)/){ push(@TIGR,$1); }
-                elsif($_=~/\<IPR.NAME.*ID\=\"(IPR\d+)/){                                 push(@IPR,$1);  }
+		   if($_=~/\<ACCESSION\>([\w+\-]+)\<\//){				$upid=$1;}
+                elsif($_=~/\<SIGNATURESEQUENCEMATCH.DATABASE..PFAM..ID..(PF\d+)/){      push(@PFAM,$1);}
+                elsif($_=~/\<SIGNATURESEQUENCEMATCH.DATABASE..TIGRFAMS..ID..(TIGR\d+)/){push(@TIGR,$1);}
+                elsif($_=~/\<IPR.NAME.*ID\=\"(IPR\d+)/){                                push(@IPR,$1); }
                 else{}
         }
-        if($_=~/\/ENTRY\>/){$inacc=0; 
-                if(exists($UR100_LEN{$ur100})){
-                	if($on%1000000==0){print "park ur100 $ur100 pfam @PFAM tigr @TIGR ipr @IPR\n";} $on++;
-                        foreach my $id (@PFAM){ $UR100_INFO{$ur100}{12}{$id}++; $UR90_INFO{$ur90}{12}{$id}++;}
-                        foreach my $id (@TIGR){ $UR100_INFO{$ur100}{13}{$id}++; $UR90_INFO{$ur90}{13}{$id}++;}
-                        foreach my $id (@IPR ){ $UR100_INFO{$ur100}{15}{$id}++; $UR90_INFO{$ur90}{15}{$id}++;}
-                }
-                @PFAM=(); @TIGR=(); @IPR=(); $upid=''; $ur100=''; $ur90='';
-	if($on>1000000){last;}#!!!!
-}        }
+        if($_=~/\/ENTRY\>/ && $inacc==1){
+		$ur100="UNIREF100_".$upid;
+		if(!exists($UR100_LEN{$ur100})){$inacc=0; next;} #no ur100, skip
+		$ur90=$UR100_UR90{$ur100};
+		if($ur90!~/UNIREF90/){$ur90="UNIREF90_".$upid;}
+		if(!exists($UR90_INFO{$ur90})){$ur90='';}
+		#output functions
+                if($on%1000000==0){$time = localtime; print "park $on time $time upid $upid ur100 $ur100 ur90 $ur90 pfam @PFAM tigr @TIGR ipr @IPR\n";} $on++;
+		foreach my $id (@PFAM){ $UR100_INFO{$ur100}{12}{$id}++; if($ur90=~/\w/){$UR90_INFO{$ur90}{12}{$id}++;}}
+                foreach my $id (@TIGR){ $UR100_INFO{$ur100}{13}{$id}++; if($ur90=~/\w/){$UR90_INFO{$ur90}{13}{$id}++;}}
+                foreach my $id (@IPR ){ $UR100_INFO{$ur100}{15}{$id}++; if($ur90=~/\w/){$UR90_INFO{$ur90}{15}{$id}++;}}
+                $inacc=0;
+		#if($on>1000000){last;}#!!!!
+        }
+}
 close INPAR;
 print "DONE $on (non-skipped) lines\n";
 ##############################################################
