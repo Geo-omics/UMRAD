@@ -405,7 +405,7 @@ while(<INUP>){
 	@NAMES=split('\(',$stuff[1]);
 	@GN=(); @KNS=();
 	#clean and get names 4+ characters
-	foreach my $n (@NAMES){ $n = CleanNames($n); if($n!~/[A-Z]{4,}/){next;} push(@GN,$n);}
+	foreach my $n (@NAMES){ $n = $n; if($n!~/[A-Z]{4,}/){next;} push(@GN,$n);}
 	while($GN[0]=~/\w/){ #get rid of duplicated names after clean
 		$n=shift(@GN); 
 		if(grep /$n/i, @KNS || grep /$n/i, @GN){} 
@@ -438,15 +438,15 @@ while(<INUP>){
 
 		 @MON=();  	if($stuff[16]=~/MONOMER/){  @MON  = ($stuff[16] =~ /([\-\w]*MONOMER[\-\w]*)/g); } 
 
-	$dna=''; 		if($stuff[17]=~/(\d+\.\.\d+).*?NOTE\=\"([^\"]+)/){ $cln=CleanNames($2); 	$dna = "DNA:".$1."|".$cln;}
+	$dna=''; 		if($stuff[17]=~/(\d+\.\.\d+).*?NOTE\=\"([^\"]+)/){ $cln=$2; 	$dna = "DNA:".$1."|".$cln;}
 
 	$met=''; @METS=();	if($stuff[18]=~/NOTE/){	    @METS = ($stuff[18]=~/NOTE\W+([\w\s]+).*?[\"\;]+/g ); 
-					@GME=(); for my $i (0..$#METS){ $METS[$i] = CleanNames($METS[$i]);
+					@GME=(); for my $i (0..$#METS){ $METS[$i] = $METS[$i];
 						if($METS[$i]=~/\w/){push(@GME, $METS[$i]);}}			$met = join(";", @GME);}
 						
 	$loc=''; @LOCS=();	if($stuff[19]=~/[\.\:][^\{\d\.\:\;\]]+\{/){ @GLO=();
-					@LOCS = ($stuff[19]=~/[\.\:][^\{\d\.\:\;\]]+\{/g); 
-					for my $i (0..$#LOCS){ $LOCS[$i] = CleanNames($LOCS[$i]); 
+					@LOCS = ($stuff[19]=~/[\.\:][^\{\d\.\:\;\]]+\{/g);
+					for my $i (0..$#LOCS){ $LOCS[$i] = $LOCS[$i];
 						if($LOCS[$i]=~/\w/){push(@GLO, $LOCS[$i]);}}			$loc = join(";", @GLO);}
 
 		 @KEGS=(); 	if($stuff[20]=~/\w+/){	    @KEGS = ($stuff[20]=~/([^\;]+)/g);}
