@@ -266,7 +266,7 @@ print "DONE $on (non-skipped) lines\n";
 
 #INPUT UNIPARC FUNCTIONS
 $inacc=0;
-$on=0; $time=localtime;
+$on=0; $picked=0; $time=localtime; my $print_progress=0;
 print "INPUT UNIPARC $time\n";
 open(INPAR,  "unpigz -c $inpar |") || die "failed to open $inpar";
 while(<INPAR>){
@@ -281,23 +281,31 @@ while(<INPAR>){
                 elsif($_=~/\<IPR.NAME.*ID\=\"(IPR\d+)/){                                push(@IPR,$1); }
                 else{}
         }
+        # print progress next time we pick an item
+        $print_progress = ($on%10000000==0) unless $print_progress;
         if($_=~/\/ENTRY\>/ && $inacc==1){
+                $on ++;
 		$ur100="UNIREF100_".$upid;
 		if(!exists($UR100_LEN{$ur100})){$inacc=0; next;} #no ur100, skip
 		$ur90=$UR100_UR90{$ur100};
 		if($ur90!~/UNIREF90/){$ur90="UNIREF90_".$upid;}
 		if(!exists($UR90_INFO{$ur90})){$ur90='';}
 		#output functions
-                if($on%1000000==0){$time = localtime; print "park $on time $time upid $upid ur100 $ur100 ur90 $ur90 pfam @PFAM tigr @TIGR ipr @IPR\n";} $on++;
+                if ($print_progress) {
+                    $time = localtime;
+                    print "park $on time $time upid $upid ur100 $ur100 ur90 $ur90 pfam @PFAM tigr @TIGR ipr @IPR\n";
+                    $print_progress=0;
+                }
 		foreach my $id (@PFAM){ $UR100_INFO{$ur100}{12}{$id}++; if($ur90=~/\w/){$UR90_INFO{$ur90}{12}{$id}++;}}
                 foreach my $id (@TIGR){ $UR100_INFO{$ur100}{13}{$id}++; if($ur90=~/\w/){$UR90_INFO{$ur90}{13}{$id}++;}}
                 foreach my $id (@IPR ){ $UR100_INFO{$ur100}{15}{$id}++; if($ur90=~/\w/){$UR90_INFO{$ur90}{15}{$id}++;}}
+                $picked++;
                 $inacc=0;
 		#if($on>1000000){last;}#!!!!
         }
 }
 close INPAR;
-print "DONE $on (non-skipped) lines\n";
+print "DONE $on records total; picked: $picked\n";
 ##############################################################
 ##############################################################
 
