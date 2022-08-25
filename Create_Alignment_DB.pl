@@ -453,11 +453,7 @@ while(<INUP>){
 					@GME=(); for my $i (0..$#METS){ $METS[$i] = $METS[$i];
 						if($METS[$i]=~/\w/){push(@GME, $METS[$i]);}}			$met = join(";", @GME);}
 						
-	$loc=''; @LOCS=();	if($stuff[19]=~/[\.\:][^\{\d\.\:\;\]]+\{/){ @GLO=();
-					@LOCS = ($stuff[19]=~/[\.\:][^\{\d\.\:\;\]]+\{/g);
-					for my $i (0..$#LOCS){ $LOCS[$i] = $LOCS[$i];
-						if($LOCS[$i]=~/\w/){push(@GLO, $LOCS[$i]);}}			$loc = join(";", @GLO);}
-
+        $loc = mangle_locations($stuff[19]);
 		 @KEGS=(); 	if($stuff[20]=~/\w+/){	    @KEGS = ($stuff[20]=~/([^\;]+)/g);}
 
 		 @RHEA=(); 	if($stuff[21]=~/\w+/){	    @RHEA = ($stuff[21]=~/(\d+)/g);}
@@ -679,4 +675,20 @@ sub fix_taxonomy{
 	return($namey);
 }
 
-
+sub mangle_locations {
+    # the uniprot subcellular location field
+    #
+    # This function picks up words and spaces following the marker "SUBCELLULAR
+    # LOCATION: ", of which there can be multiple per record.  It misses when
+    # the marker is immediately followed by some "[...]" bracketed stuff
+    # (TODO.)  Cases where the marker is followed by only a "Note=..." are
+    # skipped.  There is quite a bit more going on in the field.
+    #
+    my @found = m/SUBCELLULAR LOCATION: ([\w ]+\w)/g;
+    my %locs;
+    foreach my $i (@found) {
+        if ($i =~ m/^Note$/) { next; }  # marker was immediately followed by "Note=..."
+        $locs{$i} = 1;
+    }
+    return join(';', sort(keys %locs));
+}
