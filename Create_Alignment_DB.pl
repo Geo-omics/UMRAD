@@ -415,9 +415,10 @@ while(<INUP>){
 	#clean and get names 4+ characters
 	foreach my $n (@NAMES){ $n = $n; if($n!~/[A-Z]{4,}/){next;} push(@GN,$n);}
 	while($GN[0]=~/\w/){ #get rid of duplicated names after clean
-		$n=shift(@GN); 
-		if(grep /$n/i, @KNS || grep /$n/i, @GN){} 
-		else{ push(@KNS,$n); }}
+		$n=shift(@GN);
+		if(grep $n, @KNS || grep $n, @GN){}
+		else{ push(@KNS,$n); }
+        }
 	@KNS=nsort(@KNS); 
 	$name=join(";",@KNS);
 	if($UR100_NAME{$ur100}=~/[A-Z]{4,}/ && $name !~ /[A-Z]{4,}/){ $name=$UR100_NAME{$ur100};}
