@@ -35,6 +35,104 @@ open(OUTREF, ">", "OUT_UNIREFtest.txt")||die;
 
 
 ##############################################################
+##### 		Fix/Get UniRef #s and add basic info	######
+##############################################################
+#GET PROT LENGTH AND ODD AA DISTs
+$on=0; $time = localtime; 
+print "GET PROT LEN AND ODD AA STATS $time\n";
+open(INURFA, "unpigz -c $urfa |") || die "failed to open $urfa";
+my $ur100; @seq = ();
+while(<INURFA>){
+    $_ = uc;
+    if (/^>/) {
+        # finish current record
+        $seq = join("",@seq);
+        $len = length($seq);
+        if($len < 10) {
+            # first line or seq too short, don't store any of this
+        } else {
+            $UR100_INFO{$ur100}{7}{$tid}++;
+            $UR100_LEN{$ur100}=$len;
+            $UR100_NAME{$ur100}=$name;
+            #@AA=();
+            #for my $i (A..Z){
+            #    my $count = () = $seq =~ /$i/g;
+            #    $per=$count*100/$len;
+            #    $per=~s/\..*//;
+            #    if($per >= 10){$aa=$i.":".$per; push(@AA,$aa);}
+            #}
+            #$odd=join("|",@AA);
+            #if($odd=~/[A-Z]/){ $UR100_NAME{$ur100} .= ";".$odd; }
+            if($on%10000000==0){$time=localtime; print "on $on time $time ur100 $ur100 odd $odd len $len tid $tid name $UR100_NAME{$ur100}\n";} $on++;
+            #if($on>10000000){last;}#!!!!
+        }
+
+        # start new record
+        m/(UNIREF100\_\S+)\s+(.*?)\s+N\=\d.*TAXID\=(\d+|N\/A)/ or die "failed parsing fasta header: $_";
+        $ur100=$1;
+        # $name = CleanNames($2);
+        $name = $2;
+        $tid = $3;
+        @seq = ();
+    } else {
+        # collect sequence
+        s/[\r\n]+$//;
+        push(@seq, $_);
+    }
+}
+close INURFA;
+# finish final record (if any)
+$seq = join("",@seq);
+$len = length($seq);
+if($ur100 and $len >= 10) {
+    $UR100_INFO{$ur100}{7}{$tid}++;
+    $UR100_LEN{$ur100}=$len;
+    $UR100_NAME{$ur100}=$name;
+}
+print "DONE $on lines\n";
+
+#LOAD IDMAP
+$on=0; $time=localtime;
+print "INPUT UNIREF TO UNIPROT MAPPING $time\n";
+$upid=''; $ur100=''; $ur90=''; @KEGG=(); $tid='';
+open(INMAP,  "unpigz -c $inidm |") || die "failed opening $inidm";
+while(<INMAP>){
+        if($_!~/\w/){next;}
+        $_=uc($_);
+        $_=~s/[\r\n]+//;
+
+	(my $prot, my $type, my $id)=split("\t",$_); 
+	if($upid eq ''){$upid = $prot; $ur100=''; $ur90=''; @KEGG=(); $tid='';}
+	if($prot eq $upid){ 
+		   if($type eq "UNIREF100"){ 	$ur100=$id; }
+        	elsif($type eq "UNIREF90"){  	$ur90=$id; }
+		elsif($type eq "NCBI_TAXID"){	$tid=$id; }
+		elsif($type eq "KEGG"){foreach my $k (keys %{$KGEN_KRXN{$id}}){ push(@KEGG,$k);}}
+		else{}
+	}
+	else{	#reached the next protein, set current data and reset
+		if($ur100 !~/UNIREF100/){$upid = ''; next;}
+		if($ur90 =~ /UNIREF90/){$UR100_UR90{$ur100}=$ur90;}
+		$UPID_UR100{$upid}=$ur100;
+		foreach my $k (@KEGG){ if($k=~/^R\d+$/){ $UR100_INFO{$ur100}{17}{$k}++; $UR90_INFO{$ur90}{17}{$k}++; }}
+		if($tid=~/^\d+$/){$UR100_INFO{$ur100}{7}{$tid}++;}
+                if($on%10000000==0){ $time=localtime;
+                    $totupid = keys %UPID_UR100;
+                    $totur1  = keys %UR100_UR90;
+                    $time = localtime;
+                    print "on $on time $time type $type upid $upid prot $prot ur100 $ur100 ur90 $ur90 id $id upid_ur100 $totupid UR100_UR90 $totur1\n";
+                }
+		$on++;
+		$upid='';
+	}
+	#if($on>1000000){last;}#!!!!
+}
+close INMAP;
+print "DONE $on (non-skipped) lines\n";
+
+
+
+##############################################################
 ##############################################################
 #GET TCDB SUBSTRATES
 # - right now used to pick best TCDB
@@ -161,106 +259,6 @@ close(INFN);
 print "DONE $on lines\n";
 ##############################################################
 ##############################################################
-
-
-
-
-
-##############################################################
-##### 		Fix/Get UniRef #s and add basic info	######
-##############################################################
-#GET PROT LENGTH AND ODD AA DISTs
-$on=0; $time = localtime; 
-print "GET PROT LEN AND ODD AA STATS $time\n";
-open(INURFA, "unpigz -c $urfa |") || die "failed to open $urfa";
-my $ur100; @seq = ();
-while(<INURFA>){
-    $_ = uc;
-    if (/^>/) {
-        # finish current record
-        $seq = join("",@seq);
-        $len = length($seq);
-        if($len < 10) {
-            # first line or seq too short, don't store any of this
-        } else {
-            $UR100_INFO{$ur100}{7}{$tid}++;
-            $UR100_LEN{$ur100}=$len;
-            $UR100_NAME{$ur100}=$name;
-            #@AA=();
-            #for my $i (A..Z){
-            #    my $count = () = $seq =~ /$i/g;
-            #    $per=$count*100/$len;
-            #    $per=~s/\..*//;
-            #    if($per >= 10){$aa=$i.":".$per; push(@AA,$aa);}
-            #}
-            #$odd=join("|",@AA);
-            #if($odd=~/[A-Z]/){ $UR100_NAME{$ur100} .= ";".$odd; }
-            if($on%10000000==0){$time=localtime; print "on $on time $time ur100 $ur100 odd $odd len $len tid $tid name $UR100_NAME{$ur100}\n";} $on++;
-            #if($on>10000000){last;}#!!!!
-        }
-
-        # start new record
-        m/(UNIREF100\_\S+)\s+(.*?)\s+N\=\d.*TAXID\=(\d+|N\/A)/ or die "failed parsing fasta header: $_";
-        $ur100=$1;
-        # $name = CleanNames($2);
-        $name = $2;
-        $tid = $3;
-        @seq = ();
-    } else {
-        # collect sequence
-        s/[\r\n]+$//;
-        push(@seq, $_);
-    }
-}
-close INURFA;
-# finish final record (if any)
-$seq = join("",@seq);
-$len = length($seq);
-if($ur100 and $len >= 10) {
-    $UR100_INFO{$ur100}{7}{$tid}++;
-    $UR100_LEN{$ur100}=$len;
-    $UR100_NAME{$ur100}=$name;
-}
-print "DONE $on lines\n";
-
-#LOAD IDMAP
-$on=0; $time=localtime;
-print "INPUT UNIREF TO UNIPROT MAPPING $time\n";
-$upid=''; $ur100=''; $ur90=''; @KEGG=(); $tid='';
-open(INMAP,  "unpigz -c $inidm |") || die "failed opening $inidm";
-while(<INMAP>){
-        if($_!~/\w/){next;}
-        $_=uc($_);
-        $_=~s/[\r\n]+//;
-
-	(my $prot, my $type, my $id)=split("\t",$_); 
-	if($upid eq ''){$upid = $prot; $ur100=''; $ur90=''; @KEGG=(); $tid='';}
-	if($prot eq $upid){ 
-		   if($type eq "UNIREF100"){ 	$ur100=$id; }
-        	elsif($type eq "UNIREF90"){  	$ur90=$id; }
-		elsif($type eq "NCBI_TAXID"){	$tid=$id; }
-		elsif($type eq "KEGG"){foreach my $k (keys %{$KGEN_KRXN{$id}}){ push(@KEGG,$k);}}
-		else{}
-	}
-	else{	#reached the next protein, set current data and reset
-		if($ur100 !~/UNIREF100/){$upid = ''; next;}
-		if($ur90 =~ /UNIREF90/){$UR100_UR90{$ur100}=$ur90;}
-		$UPID_UR100{$upid}=$ur100;
-		foreach my $k (@KEGG){ if($k=~/^R\d+$/){ $UR100_INFO{$ur100}{17}{$k}++; $UR90_INFO{$ur90}{17}{$k}++; }}
-		if($tid=~/^\d+$/){$UR100_INFO{$ur100}{7}{$tid}++;}
-                if($on%10000000==0){ $time=localtime;
-                    $totupid = keys %UPID_UR100;
-                    $totur1  = keys %UR100_UR90;
-                    $time = localtime;
-                    print "on $on time $time type $type upid $upid prot $prot ur100 $ur100 ur90 $ur90 id $id upid_ur100 $totupid UR100_UR90 $totur1\n";
-                }
-		$on++;
-		$upid='';
-	}
-	#if($on>1000000){last;}#!!!!
-}
-close INMAP;
-print "DONE $on (non-skipped) lines\n";
 
 
 
