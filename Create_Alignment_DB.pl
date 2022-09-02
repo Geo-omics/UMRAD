@@ -449,7 +449,7 @@ while(<INUP>){
 
 	$dna=''; 		if($stuff[17]=~/(\d+\.\.\d+).*?NOTE\=\"([^\"]+)/){ $cln=$2; 	$dna = "DNA:".$1."|".$cln;}
 
-	$met=''; @METS=();	if($stuff[18]=~/NOTE/){	    @METS = ($stuff[18]=~/NOTE\W+([\w\s]+).*?[\"\;]+/g ); 
+	$met=''; @METS=();	if($stuff[18]=~/NOTE/){	    @METS = ($stuff[18]=~/NOTE\W+([\w\s]+\w).*?[\"\;]+/g );
 					@GME=(); for my $i (0..$#METS){ $METS[$i] = $METS[$i];
 						if($METS[$i]=~/\w/){push(@GME, $METS[$i]);}}			$met = join(";", @GME);}
 						
