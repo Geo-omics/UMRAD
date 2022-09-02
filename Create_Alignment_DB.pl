@@ -573,6 +573,7 @@ foreach my $ur100 (keys %UR100_LEN){
 
 	$nc=0;
 	for my $i (4..6){ $OUT[$i] = $UR100_INFO{$ur100}{$i};}
+        %extra_names = ();
 	for my $i (7..19){
 		@IDS=();
 		foreach my $id (keys %{$UR100_INFO{$ur100}{$i}}){ if($id=~/\w/){push(@IDS,$id);}}
@@ -580,10 +581,11 @@ foreach my $ur100 (keys %UR100_LEN){
 		    if($IDS[0]!~/\w/){ foreach my $id (keys %{$UR90_INFO{$ur90}{$i}}){ if($id=~/\w/){push(@IDS,$id);}}}
                 }
                 %seen=(); @IDS = grep{ !$seen{$_}++ } @IDS;
+
 		foreach my $id (@IDS){	
 			if($OUT[2]=~/(HYPOTHETICAL|UNCHARACTERIZED|UNDESCRIBED|UNKNOWN|PUTATIVE|UNIDENTIFIED|UNCLASSIFIED|UNASSIGNED)/){
 				if($FUNC_NAMES{$id}!~/(HYPOTHETICAL|UNCHARACTERIZED|UNDESCRIBED|UNKNOWN|PUTATIVE|UNIDENTIFIED|UNCLASSIFIED|UNASSIGNED)/){
-					if($FUNC_NAMES{$id}=~/\w/ && $nc<4 ){ $OUT[2]=$FUNC_NAMES{$id}.";".$OUT[2]; $nc++; }
+					if($FUNC_NAMES{$id}=~/\w/ && $nc<4 ){ $extra_names{$FUNC_NAMES{$id}}++; $nc++; }  # TODO: split func names by semi-colon?
 		}	}	}
 		
 		@IDS = nsort(@IDS);
@@ -591,6 +593,9 @@ foreach my $ur100 (keys %UR100_LEN){
 		if($ids !~/\w/){$ids='';}
 		$OUT[$i]=$ids;
 	}
+        if (keys %extra_names) {
+            $OUT[2]=join(';', sort(keys %extra_names)).";".$OUT[2];
+        }
 	$out=join("\t", @OUT);
 	print OUTREF "$out\n";
 	if(progress($on)) {$time=localtime; print "on $on time $time ur100 $ur100 name $OUT[2]\n";} $on++;
