@@ -548,7 +548,6 @@ undef(%UPID_BRXN);
 undef(%MONO_BRXN);
 undef(%KGEN_KRXN);
 undef(%UPID_UR100);
-undef(%UPID_UR90);
 undef(%UR100_TCDB);
 close(OUTPINT);
 $num_info_recs = keys %UR100_INFO;
