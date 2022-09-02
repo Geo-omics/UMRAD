@@ -8,7 +8,7 @@ use Sort::Naturally 'nsort';
 ##############################################################
 $inidm  = 'idmapping.dat.gz';		-e $inidm  || die "1 no $inidm  - please place into this folder and restart\n";
 $inup  	= 'uniprot-all.tab.gz';		-e $inup   || die "2 no $inup   - please place into this folder and restart\n";
-$inpar	= 'uniparc_all.xml.gz';		-e $inpar  || die "3 no $inpar   - please place into this folder and restart\n";
+$inpar	= 'uniparc_all.csv.gz';		-e $inpar  || die "3 no $inpar   - please place into this folder and restart\n";
 $urfa	= 'uniref100.fasta.gz';         -e $urfa   || die "4 no $urfa   - please place into this folder and restart\n";
 $inkegn	= 'KEGG_GENES_RXN.txt';		-e $inkegn || die "5 no $inkegn - please place into this folder and restart\n";
 $inbmon	= 'BIOCYC_MONO_RXNS.txt';	-e $inbmon || die "6 no $inbmon - please place into this folder and restart\n";
@@ -273,46 +273,39 @@ print "DONE $on lines\n\n";
 
 #INPUT UNIPARC FUNCTIONS
 $inacc=0;
-$on=0; $picked=0; $time=localtime; my $print_progress=0;
+$on=0; $picked=0; $skipped=0; $time=localtime; my $print_progress=0;
 print "INPUT UNIPARC $time\n";
-open(INPAR,  "unpigz -c $inpar |") || die "failed to open $inpar";
-while(<INPAR>){
-        if($_!~/\w/){next;}
-        $_=uc($_);
-        $_=~s/[\r\n]+//;
-        if($_ =~ /ENTRY.DATASET/){$inacc=1; @PFAM=(); @TIGR=(); @IPR=(); $upid=''; $ur100=''; $ur90='';}
-        if($inacc==1){
-		   if($_=~/\<ACCESSION\>([\w+\-]+)\<\//){				$upid=$1;}
-                elsif($_=~/\<SIGNATURESEQUENCEMATCH.DATABASE..PFAM..ID..(PF\d+)/){      push(@PFAM,$1);}
-                elsif($_=~/\<SIGNATURESEQUENCEMATCH.DATABASE..TIGRFAMS..ID..(TIGR\d+)/){push(@TIGR,$1);}
-                elsif($_=~/\<IPR.NAME.*ID\=\"(IPR\d+)/){                                push(@IPR,$1); }
-                else{}
-        }
-        # print progress next time we pick an item
-        $print_progress = ($on%10000000==0) unless $print_progress;
-        if($_=~/\/ENTRY\>/ && $inacc==1){
-                $on ++;
-		$ur100="UNIREF100_".$upid;
-		if(!exists($UR100_LEN{$ur100})){$inacc=0; next;} #no ur100, skip
-		$ur90=$UR100_UR90{$ur100};
-		if($ur90!~/UNIREF90/){$ur90="UNIREF90_".$upid;}
-		if(!exists($UR90_INFO{$ur90})){$ur90='';}
-		#output functions
-                if ($print_progress) {
-                    $time = localtime;
-                    print "park $on time $time upid $upid ur100 $ur100 ur90 $ur90 pfam @PFAM tigr @TIGR ipr @IPR\n";
-                    $print_progress=0;
-                }
-		foreach my $id (@PFAM){ $UR100_INFO{$ur100}{12}{$id}++; if($ur90=~/\w/){$UR90_INFO{$ur90}{12}{$id}++;}}
-                foreach my $id (@TIGR){ $UR100_INFO{$ur100}{13}{$id}++; if($ur90=~/\w/){$UR90_INFO{$ur90}{13}{$id}++;}}
-                foreach my $id (@IPR ){ $UR100_INFO{$ur100}{15}{$id}++; if($ur90=~/\w/){$UR90_INFO{$ur90}{15}{$id}++;}}
-                $picked++;
-                $inacc=0;
-		#if($on>1000000){last;}#!!!!
+open(INPARTAB,  "unpigz -c $inpar |") || die "failed to open $inpar";
+while(<INPARTAB>){
+        chomp;
+        ($upid, $pfam, $tigr, $ipr) = split "\t";
+
+        $on ++;
+	$ur100="UNIREF100_".$upid;
+	if (! exists($UR100_LEN{$ur100})) {$skipped++; next;} #no ur100, skip
+
+        @PFAM = split(';', $pfam);
+        @TIGR = split(';', $tigr);
+        @IPR = split(';', $ipr);
+
+	$ur90=$UR100_UR90{$ur100};
+	if($ur90!~/UNIREF90/) {$ur90="UNIREF90_".$upid;}
+	if(!exists($UR90_INFO{$ur90})) {$ur90='';}
+
+        #output functions
+        foreach my $id (@PFAM){ $UR100_INFO{$ur100}{12}{$id}++; if($ur90=~/\w/){$UR90_INFO{$ur90}{12}{$id}++;}}
+        foreach my $id (@TIGR){ $UR100_INFO{$ur100}{13}{$id}++; if($ur90=~/\w/){$UR90_INFO{$ur90}{13}{$id}++;}}
+        foreach my $id (@IPR ){ $UR100_INFO{$ur100}{15}{$id}++; if($ur90=~/\w/){$UR90_INFO{$ur90}{15}{$id}++;}}
+
+        $picked++;
+        if (progress($picked)) {
+            $time = localtime;
+            print "park $on time $time picked=$picked upid $upid ur100 $ur100 ur90 $ur90 pfam @PFAM tigr @TIGR ipr @IPR\n";
         }
 }
-close INPAR;
-print "DONE $on records total; picked: $picked\n";
+close INPARTAB;
+$num_info_recs = keys %UR100_INFO;
+print "DONE $on records total; picked: $picked; skipped (no sequence): $skipped; #NAME=$num_info_recs\n\n";
 ##############################################################
 ##############################################################
 

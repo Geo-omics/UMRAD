@@ -1,0 +1,118 @@
+#!/usr/bin/env python3
+"""
+Takes an uniparc_all.xml.gz and turns it into a tab-separated CSV
+
+usage:
+    unpigz -c uniparc_all.xml.gz | mangle-uniparc-all-xml > uniparc_all.csv
+
+Will extract Pfam, TIGR, and IPR cross-reference.  Optional filtering by IDs
+from uniref100.fasta.  This will make the output smalled without
+Creat_Alingment_DB.pl noticing the difference (except for running faster).  The
+input XML is primitively parsed, making strong assumptions about formatting.
+The output format is:
+
+    <upid><TAB><pfam1>;<pfam2>;...<TAB><tigr1>;<tigr2>;...<TAB><ipr1>;<ipr2>;...
+
+one such row pre UPID
+"""
+import argparse
+import sys
+
+
+argp = argparse.ArgumentParser(description=__doc__)
+arg_grp = argp.add_mutually_exclusive_group()
+arg_grp.add_argument(
+    '--fasta',
+    help='path to (unzipped!) uniref100.fasta fasta file, optional, will '
+         'filter output by available UPIDs, fasta header is assumed to be of '
+         'the format ">UniRef100_<UPID> ..."',
+)
+arg_grp.add_argument(
+    '--fasta-ids',
+    help='path to text file listing the IDs from uniref100.fasta. This will '
+         'also do the filtering as described for the --fasta option'
+)
+args = argp.parse_args()
+
+
+upids = None
+if args.fasta:
+    # make upid filter
+    print(f'reading fasta file: {args.fasta} ...', end='', flush=True,
+          file=sys.stderr)
+    upids = set()
+    with open(args.fasta) as ifile:
+        for line in ifile:
+            if line.startswith('>'):
+                upids.add(
+                    line.split(' ', maxsplit=1)[0].removeprefix('>UniRef100_')
+                )
+    print(f' {len(upids)} sequences [OK]', file=sys.stderr)
+elif args.fasta_ids:
+    # make upid filter
+    print(f'reading id file: {args.fasta_ids} ...', end='', flush=True,
+          file=sys.stderr)
+    upids = set()
+    with open(args.fasta_ids) as ifile:
+        for line in ifile:
+            upids.add(line.strip().removeprefix('UniRef100_'))
+    print(f' {len(upids)} sequences [OK]', file=sys.stderr)
+
+
+acc_prefix = '<accession>'
+tigr_prefix = '<signatureSequenceMatch database="TIGRFAMs" id="'
+ipr_prefix = '<ipr name="'  # .*" id="(IPR.*)"/>
+pfam_prefix = '<signatureSequenceMatch database="Pfam" id="'
+
+acc = None
+pfam = None
+tigr = None
+ipr = None
+for line in sys.stdin:
+    line = line.strip()
+    if line.startswith(acc_prefix):
+        if acc is None:
+            # first entry, or is skipped
+            pass
+        else:
+            # finalize previous entry
+            if pfam or tigr or ipr:
+                # skip if no info, TODO: verify that this is fine
+                pfam = ';'.join(pfam)
+                tigr = ';'.join(tigr)
+                ipr = ';'.join(ipr)
+                sys.stdout.write(f'{acc}\t{pfam}\t{tigr}\t{ipr}\n')
+        # set up new entry:
+        # acc: rm prefix and get everything until next <
+        acc = line.removeprefix(acc_prefix).split('<', maxsplit=1)[0]
+        pfam = []
+        tigr = []
+        ipr = []
+        if upids is not None and acc not in upids:
+            # skip whole entry
+            acc = None
+        continue
+
+    if acc is None:
+        # entry is skipped
+        continue
+
+    if line.startswith(pfam_prefix):
+        pfam.append(line.removeprefix(pfam_prefix).split('"', maxsplit=1)[0])
+        continue
+
+    if line.startswith(tigr_prefix):
+        tigr.append(line.removeprefix(tigr_prefix).split('"', maxsplit=1)[0])
+        continue
+
+    if line.startswith(ipr_prefix):
+        ipr.append(line.removeprefix(ipr_prefix).split('"', maxsplit=3)[2])
+        continue
+
+# finalize last entry
+if acc is not None and (pfam or tigr or ipr):
+    # skip if no info, TODO: verify that this is fine
+    pfam = ';'.join(pfam)
+    tigr = ';'.join(tigr)
+    ipr = ';'.join(ipr)
+    sys.stdout.write(f'{acc}\t{pfam}\t{tigr}\t{ipr}\n')
