@@ -19,7 +19,7 @@ INFILES=(
     RHEA_RXN_DB.txt
     uniprot-all.tab.gz
     UR100vsTCDB.m8
-    uniparc_all.csv
+    uniparc_all.csv.gz
 )
 
 # $SCRIPTS_BASE/split-umrad-input --number $N
@@ -28,9 +28,9 @@ for i in $(seq $N); do
     subdir=part$i
 
     mkdir -p "$subdir"
+    [[ -e "$subdir/done" ]] && continue
     (
         cd "$subdir"
-        [[ -e "done" ]] && continue
         ln -s "../uniref100.${i}.fasta.gz" uniref100.fasta.gz
         ln -s "../idmapping.dat.${i}.gz" idmapping.dat.gz
         ln -s -t ./ "${INFILES[@]/#/${FILE_BASE}/}"
