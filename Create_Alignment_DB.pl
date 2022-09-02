@@ -387,7 +387,6 @@ print OUTPINT "SigPep\tTMS\tDNA\tTaxonId\tMetal\tLoc\t";
 print OUTPINT "TCDB\tCOG\tPfam\tTigr\tGene_Ont\tInterPro\tECs\t";
 print OUTPINT "kegg\trhea\tbiocyc\n";
 open(INUP, "unpigz -c $inup |") || die "failed to open $inup";
-my %UPID_UR90;
 my ($plen, @NAMES, @GN, @KNS, $n, $sig, $tms, @TMS, $tcp, @TCDBS, %seen, $cog, @COG);
 my ($pfa, $tig, $gos, @GOS, $ecs, @ECS, @MON, $dna, $cln, $met, @METS, @GME, $loc);
 my (@KEGS, @RHEA, %BRXN, %RRXN, %KRXN, @BIO, @RHE, @KEG, $kegg, $rhea, $bioc, @FIN);
@@ -408,13 +407,11 @@ while(<INUP>){
 	$upid   = $stuff[0];
 	if(!exists($UPID_UR100{$upid})){	$skipped++; next;}
 	$ur100	=$UPID_UR100{$upid};
-	$ur90 	=$UPID_UR90{$upid};  # FIXME: what is UPID_UR90 for?
+        # $ur90 	=$UPID_UR90{$upid};  # FIXME: what is UPID_UR90 for?
 	$name	=$stuff[1];
 	$plen	=$stuff[2];
 	if($plen!~/\d/){$plen=$UR100_LEN{$ur100};}
 	$tid	=$stuff[3];
-	delete($UPID_UR100{$upid});
-	delete($UPID_UR90{$upid});
 
 	# FIX NAMES
 	@NAMES=split('\(',$stuff[1]);
@@ -476,7 +473,6 @@ while(<INUP>){
 	foreach my $rxn (sort{$b<=>$a} keys %{$UPID_BRXN{$upid}}){ 	if($rxn=~/\w/){$BRXN{$rxn}++; }}
 	foreach my $rxn (sort{$b<=>$a} keys %{$UPID_RRXN{$upid}}){ 	if($rxn=~/\w/){$RRXN{$rxn}++; }}
 	foreach my $rxn (sort{$b<=>$a} keys %{$UPID_KRXN{$upid}}){ 	if($rxn=~/\w/){$KRXN{$rxn}++; }}
-	delete($UPID_BRXN{$upid}); delete($UPID_KRXN{$upid}); delete($UPID_RRXN{$upid});
 
 	foreach my $ec 	(@ECS){ #match RHEA/KEGG/BIOCYC ECs data with uniprot ECs to get the related rxn 
 		foreach my $rxn (sort{$b<=>$a} keys %{$EC_BRXN{$ec}}){  if($rxn=~/\w/){$BRXN{$rxn}++; }}
@@ -576,8 +572,6 @@ foreach my $ur100 (keys %UR100_LEN){
 	$OUT[1]=$ur90;
 	$OUT[2]=$UR100_NAME{$ur100};
 	$OUT[3]=$UR100_LEN{$ur100};
-	delete($UR100_LEN{$ur100}); 
-	delete($UR100_NAME{$ur100});
 
 	$nc=0;
 	for my $i (4..6){ $OUT[$i] = $UR100_INFO{$ur100}{$i};}
@@ -607,7 +601,6 @@ foreach my $ur100 (keys %UR100_LEN){
 	$out=join("\t", @OUT);
 	print OUTREF "$out\n";
 	if(progress($on)) {$time=localtime; print "on $on time $time ur100 $ur100 name $OUT[2]\n";} $on++;
-	delete($UR100_INFO{$ur100});
 }
 $time = localtime;
 print "DONE $on lines -- $time -- skipped $nolenskip\n\n";
