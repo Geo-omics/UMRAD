@@ -1,0 +1,172 @@
+#!/usr/bin/env python3
+"""
+split input for Create_Alignment.pl n-ways
+
+This splits the files idmapping.dat.gz and uniref100.fasta.gz into sets that
+can be processed independently by Create_Alignment_DB.pl.
+"""
+import argparse
+from itertools import cycle, groupby
+import subprocess
+
+
+# input file names
+IDMAP = 'idmapping.dat.gz'
+URFASTA = 'uniref100.fasta.gz'
+
+NO_SEQUENCE = object()
+
+
+argp = argparse.ArgumentParser(description=__doc__)
+argp.add_argument(
+    '-n', '--number',
+    type=int,
+    default=10,
+    help='approximate number of chunks we\'re aiming for',
+)
+args = argp.parse_args()
+if args.number < 1:
+    argp.error('number must be greater than zero')
+
+
+class groupby_test:
+    """
+    A groupby grouper with test for the first element of the group
+
+    E.g.:
+        fasta = open('foo.fasta')
+        for rec in groupby_test(fasta, lambda x: x.startswith('>')):
+            # rec iterates over lines of fasta record
+            ...
+    """
+    NOT_SET = object()
+
+    def __init__(self, it, first_item_test):
+        if callable(first_item_test):
+            self.test = first_item_test
+        else:
+            raise ValueError('must be a callable')
+        self.it = iter(it)
+        self._next_first_item = self.NOT_SET
+
+    def __iter__(self):
+        return self
+
+    def _grouper(self):
+        if self._next_first_item is self.NOT_SET:
+            raise RuntimeError('don\'t have a first item')
+
+        yield self._next_first_item
+        for item in self.it:
+            if self.test(item):
+                # save this for next group
+                self._next_first_item = item
+                return
+            else:
+                yield item
+
+        # we exhausted our original itertator, next next() will stop us too
+        self._next_first_item = self.NOT_SET
+
+    def __next__(self):
+        while self._next_first_item is self.NOT_SET:
+            # first call of next() or original iterator exhausted
+            # Initial items that do not pass the test get discarded here.
+            item = next(self.it)  # may raise StopIteration here
+            if self.test(item):
+                self._next_first_item = item
+
+        return self._grouper()
+
+
+def process_fasta(n):
+    """ splits fasta file, saves chunks and returns id->chunk mapping """
+    chunk_map = {}
+
+    inp = subprocess.Popen(
+        ['unpigz', '-c', URFASTA],
+        stdout=subprocess.PIPE,
+    )
+
+    zippers = {}
+    for i in range(1, n + 1):
+        p = subprocess.Popen(
+            f'pigz -c > uniref100.{i}.fasta.gz',
+            shell=True,
+            stdin=subprocess.PIPE,
+        )
+        zippers[i] = p
+
+    fasta_recs = groupby_test(inp.stdout, lambda x: x.startswith(b'>'))
+    for chunk, rec in zip(cycle(range(1, n + 1)), fasta_recs):
+        rec = list(rec)
+        # process fasta header
+        ur100 = rec[0].split(maxsplit=1)[0].decode().removeprefix('>')
+        chunk_map[ur100] = chunk
+
+        zippers[chunk].stdin.write(b''.join(rec))
+
+    for i, p in zippers.items():
+        p.communicate()
+        if p.returncode:
+            raise RuntimeError(f'zipper process {i} failed with code '
+                               f'{p.returncode}')
+
+    return chunk_map
+
+
+chunk_map = process_fasta(args.number)
+number = len(chunk_map)
+print(f'num of UR100 IDs: {len(chunk_map)}\n{str(chunk_map)[:1000]=}')
+
+# PROCESS IDMAPPING
+oprocs = []
+for i in range(1, args.number + 1):
+    p = subprocess.Popen(
+        [f'pigz -c > idmapping.dat.{i}.gz'],
+        shell=True,
+        stdin=subprocess.PIPE,
+    )
+    oprocs.append(p)
+
+unzipper = subprocess.Popen(
+    ['unpigz', '-c', IDMAP],
+    stdout=subprocess.PIPE,
+)
+
+
+def rows(lines):
+    # parse idmapping file
+    for line in lines:
+        upid, idtype, value = line.decode().rstrip('\n').split('\t')
+        yield upid, idtype, value
+
+
+num_missing = 0
+num_no_ur100 = 0
+for _, row_grp in groupby(rows(unzipper.stdout), key=lambda x: x[0]):
+    data = []
+    chunk = None
+    for upid, idtype, value in row_grp:
+        if idtype == 'UniRef100':
+            if chunk is not None:
+                raise RuntimeError('multiple ur100s in one record?')
+            chunk = chunk_map.get(value, NO_SEQUENCE)
+        data.append(f'{upid}\t{idtype}\t{value}\n')
+
+    if chunk is NO_SEQUENCE:
+        # no such UR100 in fasta file
+        num_missing += 1
+    elif chunk is None:
+        # UPID had no corresponding UR100?
+        num_no_ur100 += 1
+    else:
+        oprocs[chunk - 1].stdin.write(''.join(data).encode())
+
+print(f'missing in fasta file: {num_missing=}')
+print(f'no UR100 for UPID: {num_no_ur100=}')
+
+for i, p in enumerate(oprocs, start=1):
+    p.communicate()
+    if p.returncode:
+        print('zipper process for n={i} {p=} exited with {p.returncode=}')

@@ -1,0 +1,40 @@
+#!/bin/bash
+#
+# Orchestrate partitioned UMRAD DB building
+#
+#
+set -eu
+
+SCRIPTS_BASE=~/src/UMRAD
+FILE_BASE=/tmp/heinro/umrad_test
+N=10
+
+INFILES=(
+    BIOCYC_MONO_RXNS.txt
+    BIOCYC_RXN_DB.txt
+    Function_Names.txt
+    getSubstrates.py
+    KEGG_GENES_RXN.txt
+    KEGG_RXN_DB.txt
+    RHEA_RXN_DB.txt
+    uniprot-all.tab.gz
+    UR100vsTCDB.m8
+    uniparc_all.csv
+)
+
+# $SCRIPTS_BASE/split-umrad-input --number $N
+
+for i in $(seq $N); do
+    subdir=part$i
+
+    mkdir -p "$subdir"
+    (
+        cd "$subdir"
+        [[ -e "done" ]] && continue
+        ln -s "../uniref100.${i}.fasta.gz" uniref100.fasta.gz
+        ln -s "../idmapping.dat.${i}.gz" idmapping.dat.gz
+        ln -s -t ./ "${INFILES[@]/#/${FILE_BASE}/}"
+        [[ -e stop ]] || /usr/bin/time -v perl $SCRIPTS_BASE/Create_Alignment_DB.pl > log
+        touch "done"
+    )
+done
