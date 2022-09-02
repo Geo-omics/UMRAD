@@ -1,4 +1,4 @@
-#use warnings;
+use warnings;
 use Sort::Naturally 'nsort';
 
 
@@ -54,16 +54,7 @@ while(<INURFA>){
             $UR100_INFO{$ur100}{7}{$tid}++;
             $UR100_LEN{$ur100}=$len;
             $UR100_NAME{$ur100}=$name;
-            #@AA=();
-            #for my $i (A..Z){
-            #    my $count = () = $seq =~ /$i/g;
-            #    $per=$count*100/$len;
-            #    $per=~s/\..*//;
-            #    if($per >= 10){$aa=$i.":".$per; push(@AA,$aa);}
-            #}
-            #$odd=join("|",@AA);
-            #if($odd=~/[A-Z]/){ $UR100_NAME{$ur100} .= ";".$odd; }
-            if(progress($on)){$time=localtime; print "on $on time $time ur100 $ur100 odd $odd len $len tid $tid name $UR100_NAME{$ur100}\n";} $on++;
+            if(progress($on)){$time=localtime; print "on $on time $time ur100 $ur100 len $len tid $tid name $UR100_NAME{$ur100}\n";} $on++;
             #if($on>10000000){last;}#!!!!
         }
 
@@ -136,7 +127,7 @@ while(<INMAP>){
 	#if($on>1000000){last;}#!!!!
 }
 close INMAP;
-my $num_info_recs = keys %UR100_INFO;
+$num_info_recs = keys %UR100_INFO;
 my $num_upid2ur100 = keys %UPID_UR100;
 print "DONE $on UPIDs; but no sequence: $seq_missing, entries w/o UR100: $no_ur100; #INFO=$num_info_recs #UPID2UR100=$num_upid2ur100\n\n";
 
@@ -272,8 +263,7 @@ print "DONE $on lines\n\n";
 
 
 #INPUT UNIPARC FUNCTIONS
-$inacc=0;
-$on=0; $picked=0; $skipped=0; $time=localtime; my $print_progress=0;
+$on=0; $picked=0; $skipped=0; $time=localtime; $print_progress=0;
 print "INPUT UNIPARC $time\n";
 open(INPARTAB,  "unpigz -c $inpar |") || die "failed to open $inpar";
 while(<INPARTAB>){
@@ -492,7 +482,7 @@ while(<INUP>){
 
 	#COMBINE AND CLEAN PROT INFO
 	@FIN=();
-	$FIN[0]=$ur100;		$UR100_INFO{$ur100}{0}++; 
+	$FIN[0]=$ur100;		$UR100_INFO{$ur100}{0}++;  # TODO: need this?
 	$FIN[1]=$ur90;		$UR100_INFO{$ur100}{1}=$ur90;
 	$FIN[2]=$name;		$UR100_INFO{$ur100}{2}=$UR100_NAME{$ur100};
 	$FIN[3]=$plen;		$UR100_INFO{$ur100}{3}=$UR100_LEN{$ur100};
@@ -501,7 +491,7 @@ while(<INUP>){
 	$FIN[4]=$sig;
 	$FIN[5]=$tms;
 	$FIN[6]=$dna;		for my $i (4..6){ $UR100_INFO{$ur100}{$i}=$FIN[$i]; }
-	$FIN[7]=$tid;		if($tid=~/^\d+$/){$UR100_INFO{$ur100}{7}{$tid}++;}
+	$FIN[7]=$tid;		if($tid=~/^\d+$/){$UR100_INFO{$ur100}{7}{$tid}++;}  # TODO: overwrite existing??
 	
 	#basic Function IDs
 	$FIN[8]=$met;
