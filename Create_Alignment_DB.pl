@@ -1,3 +1,4 @@
+use strict;
 use warnings;
 use Sort::Naturally 'nsort';
 
@@ -6,18 +7,18 @@ use Sort::Naturally 'nsort';
 ##############################################################
 #OPEN FILES - CHECK
 ##############################################################
-$inidm  = 'idmapping.dat.gz';		-e $inidm  || die "1 no $inidm  - please place into this folder and restart\n";
-$inup  	= 'uniprot-all.tab.gz';		-e $inup   || die "2 no $inup   - please place into this folder and restart\n";
-$inpar	= 'uniparc_all.csv.gz';		-e $inpar  || die "3 no $inpar   - please place into this folder and restart\n";
-$urfa	= 'uniref100.fasta.gz';         -e $urfa   || die "4 no $urfa   - please place into this folder and restart\n";
-$inkegn	= 'KEGG_GENES_RXN.txt';		-e $inkegn || die "5 no $inkegn - please place into this folder and restart\n";
-$inbmon	= 'BIOCYC_MONO_RXNS.txt';	-e $inbmon || die "6 no $inbmon - please place into this folder and restart\n";
-$inrhrx	= 'RHEA_RXN_DB.txt';		-e $inrhrx || die "7 no $inrhrx - please place into this folder and restart\n";
-$inkgrx = 'KEGG_RXN_DB.txt';		-e $inkgrx || die "8 no $inkgrx - please place into this folder and restart\n";
-$inbcrx	= 'BIOCYC_RXN_DB.txt';		-e $inbcrx || die "9 no $inbcrx - please place into this folder and restart\n";
-$intcdb	= 'UR100vsTCDB.m8';		-e $intcdb || die "10 no $intcdb - please place into this folder and restart\n";
-$intrch	= 'getSubstrates.py';		-e $intrch || die "11 no $intrch - please place into this folder and restart\n";
-$infn	= 'Function_Names.txt';		-e $infn   || die "12 no $infn - please place into this folder and restart\n";
+my $inidm  = 'idmapping.dat.gz';		-e $inidm  || die "1 no $inidm  - please place into this folder and restart\n";
+my $inup  	= 'uniprot-all.tab.gz';		-e $inup   || die "2 no $inup   - please place into this folder and restart\n";
+my $inpar	= 'uniparc_all.csv.gz';		-e $inpar  || die "3 no $inpar   - please place into this folder and restart\n";
+my $urfa	= 'uniref100.fasta.gz';         -e $urfa   || die "4 no $urfa   - please place into this folder and restart\n";
+my $inkegn	= 'KEGG_GENES_RXN.txt';		-e $inkegn || die "5 no $inkegn - please place into this folder and restart\n";
+my $inbmon	= 'BIOCYC_MONO_RXNS.txt';	-e $inbmon || die "6 no $inbmon - please place into this folder and restart\n";
+my $inrhrx	= 'RHEA_RXN_DB.txt';		-e $inrhrx || die "7 no $inrhrx - please place into this folder and restart\n";
+my $inkgrx = 'KEGG_RXN_DB.txt';		-e $inkgrx || die "8 no $inkgrx - please place into this folder and restart\n";
+my $inbcrx	= 'BIOCYC_RXN_DB.txt';		-e $inbcrx || die "9 no $inbcrx - please place into this folder and restart\n";
+my $intcdb	= 'UR100vsTCDB.m8';		-e $intcdb || die "10 no $intcdb - please place into this folder and restart\n";
+my $intrch	= 'getSubstrates.py';		-e $intrch || die "11 no $intrch - please place into this folder and restart\n";
+my $infn	= 'Function_Names.txt';		-e $infn   || die "12 no $infn - please place into this folder and restart\n";
 
 
 #output
@@ -31,23 +32,22 @@ open(OUTREF, ">", "OUT_UNIREFtest.txt")||die;
 
 
 
-
+my (%UR100_INFO, %UR100_LEN, %UR100_NAME);
 
 
 ##############################################################
 ##### 		Fix/Get UniRef #s and add basic info	######
 ##############################################################
 #GET PROT LENGTH AND ODD AA DISTs
-$on=0; $time = localtime; 
+my $on = 0; my $time = localtime;
 print "GET PROT LEN AND ODD AA STATS $time\n";
 open(INURFA, "unpigz -c $urfa |") || die "failed to open $urfa";
-my $ur100; @seq = ();
+my $ur100; my @seq = (); my ($len, $tid, $name);
 while(<INURFA>){
     $_ = uc;
     if (/^>/) {
         # finish current record
-        $seq = join("",@seq);
-        $len = length($seq);
+        $len = length(join("",@seq));
         if($len < 10) {
             # first line or seq too short, don't store any of this
         } else {
@@ -67,14 +67,13 @@ while(<INURFA>){
         @seq = ();
     } else {
         # collect sequence
-        s/[\r\n]+$//;
+        chomp;
         push(@seq, $_);
     }
 }
 close INURFA;
 # finish final record (if any)
-$seq = join("",@seq);
-$len = length($seq);
+$len = length(join("",@seq));
 if($ur100 and $len >= 10) {
     $UR100_INFO{$ur100}{7}{$tid}++;
     $UR100_LEN{$ur100}=$len;
@@ -87,9 +86,11 @@ my $num_name_recs = keys %UR100_NAME;
 print "DONE $on lines #INFO=$num_info_recs #LEN=$num_len_recs #NAME=$num_name_recs\n\n";
 
 #LOAD IDMAP
+my (%KGEN_KRXN, %UR100_UR90, %UPID_UR100, %UR90_INFO);
 $on=0; $time=localtime; my $seq_missing=0; my $print_progress = 0; my $no_ur100 = 0;
 print "INPUT UNIREF TO UNIPROT MAPPING $time\n";
-$upid=''; $ur100=''; $ur90=''; @KEGG=(); $tid='';
+my $upid=''; $ur100=''; my $ur90=''; my @KEGG=(); $tid='';
+my ($totupid, $totur1);
 open(INMAP,  "unpigz -c $inidm |") || die "failed opening $inidm";
 while(<INMAP>){
         if($_!~/\w/){next;}
@@ -141,6 +142,8 @@ print "DONE $on UPIDs; but no sequence: $seq_missing, entries w/o UR100: $no_ur1
 $time=localtime; $on=0;
 print "INPUT TRANSPORTER SUBSTRATES $time\n";
 open(INTRCH, $intrch) || die "failed to open $intrch";
+my %TCDB_CPDS;
+my (@CHEBS, $chebi,);
 while(<INTRCH>){
         if($_!~/\w/){next;}
         $_=uc($_);
@@ -151,7 +154,6 @@ while(<INTRCH>){
         @CHEBS = ( $chebs =~ /(CHEBI.\d+)/g );
         $chebi=join(";",@CHEBS);
         $TCDB_CPDS{$tcdb}=$chebi;
-	#print "chebi $chebi tcdb $tcdb\n";
 	if(progress($on)){$time=localtime; print "on $on $time tcdb $tcdb chebi $chebi\n";} $on++;
 }
 close INTRCH;
@@ -161,6 +163,8 @@ print "DONE $on lines\n\n";
 $time=localtime; $on=0;
 print "INPUT UNIREF100 vs TCDB MATCHES $time\n";
 open(INTCDB, $intcdb) || die "failed to open $intcdb";
+my (@stuff, $tcdb, $pid, $cov, $sco, %UR100_TCDB_SCO, %HASCPD);
+my %UR100_TCDB;
 while(<INTCDB>){
         if($_ !~ /\w/){next;}
         $_=uc($_);
@@ -227,6 +231,7 @@ print "DONE $on lines\n\n";
 $time=localtime; $on=0;
 print "INPUT MONOMERS $time\n";
 open(INBMON, $inbmon) || die "failed to open $inbmon";
+my %MONO_BRXN;
 while(<INBMON>){
         if($_!~/\w/){next;}
         $_=uc($_);
@@ -245,6 +250,7 @@ print "DONE $on lines\n\n";
 $time=localtime; $on=0;
 print "INPUT $infn $time\n";
 open(INFN, $infn) || die "failed to open $infn";
+my %FUNC_NAMES;
 while(<INFN>){
 	if($_ !~ /\w/){next;}
 	$_=uc($_);
@@ -263,9 +269,11 @@ print "DONE $on lines\n\n";
 
 
 #INPUT UNIPARC FUNCTIONS
-$on=0; $picked=0; $skipped=0; $time=localtime; $print_progress=0;
+$on=0; my $picked=0; my $skipped=0; $time=localtime; $print_progress=0;
 print "INPUT UNIPARC $time\n";
 open(INPARTAB,  "unpigz -c $inpar |") || die "failed to open $inpar";
+my (@PFAM, @TIGR, @IPR);
+my ($pfam, $tigr, $ipr);
 while(<INPARTAB>){
         chomp;
         ($upid, $pfam, $tigr, $ipr) = split "\t";
@@ -309,6 +317,8 @@ print "DONE $on records total; picked: $picked; skipped (no sequence): $skipped;
 $on=0; $time=localtime;
 print "INPUT RHEA RXN $time\n";
 open(INRHRX, $inrhrx) || die "failed to open $inrhrx";
+my (%EC_RRXN, %UPID_RRXN);
+my ($rxn, $ec);
 while(<INRHRX>){
         if($_!~/\w/){next;}
         $_=uc($_);
@@ -328,6 +338,7 @@ print "DONE $on lines\n\n";
 $on=0; $time=localtime;
 print "INPUT KEGG RXN $time\n";
 open(INKGRX, $inkgrx) || die "failed to open $inkgrx";
+my (%EC_KRXN, %UPID_KRXN);
 while(<INKGRX>){
         if($_!~/\w/){next;}
         $_=uc($_);
@@ -346,6 +357,7 @@ print "DONE $on lines\n\n";
 $on=0; $time=localtime;
 print "INPUT BIOCYC RXN $time\n";
 open(INBCRX, $inbcrx) || die "failed to open $inbcrx";
+my (%EC_BRXN, %UPID_BRXN);
 while(<INBCRX>){
         if($_!~/\w/){next;}
         $_=uc($_);
@@ -368,13 +380,18 @@ print "DONE $on lines\n\n";
 ##############################################################
 ##### 		INPUT / OUTPUT UNIPROT DOWNLOAD		######
 ##############################################################
-$on=0; $time=localtime;
+$on=0; $time=localtime; $skipped = 0;
 print "INPUT UNIPROT $time\n";
 print OUTPINT "UP-ID\tUR100\tUR90\tName\tLength\t";
 print OUTPINT "SigPep\tTMS\tDNA\tTaxonId\tMetal\tLoc\t";
 print OUTPINT "TCDB\tCOG\tPfam\tTigr\tGene_Ont\tInterPro\tECs\t";
 print OUTPINT "kegg\trhea\tbiocyc\n";
 open(INUP, "unpigz -c $inup |") || die "failed to open $inup";
+my %UPID_UR90;
+my ($plen, @NAMES, @GN, @KNS, $n, $sig, $tms, @TMS, $tcp, @TCDBS, %seen, $cog, @COG);
+my ($pfa, $tig, $gos, @GOS, $ecs, @ECS, @MON, $dna, $cln, $met, @METS, @GME, $loc);
+my (@KEGS, @RHEA, %BRXN, %RRXN, %KRXN, @BIO, @RHE, @KEG, $kegg, $rhea, $bioc, @FIN);
+my (@IDS, @GIDS, $out);
 while(<INUP>){
 	if($_!~/\w/){next;}
 	$_=uc($_);
@@ -382,16 +399,16 @@ while(<INUP>){
 	@stuff=split("\t",$_);
 
 	#screen bad entries
-	if($stuff[0] =~ /^(ENTRY|PID)/i){	$skipee++; next;}	#skip column headers
-	if($stuff[0] !~ /\w+/){			$skipee++; next;}	#no PID
-	if($stuff[2] < 10 ){			$skipee++; next;}	#prot <10 a.a.
-	if($stuff[3] !~ /^\d+$/){		$skipee++; next;}	#no taxid
+	if($stuff[0] =~ /^(ENTRY|PID)/i){	$skipped++; next;}	#skip column headers
+	if($stuff[0] !~ /\w+/){			$skipped++; next;}	#no PID
+	if($stuff[2] < 10 ){			$skipped++; next;}	#prot <10 a.a.
+	if($stuff[3] !~ /^\d+$/){		$skipped++; next;}	#no taxid
 
 	#SET BASIC VARIABLES
 	$upid   = $stuff[0];
-	if(!exists($UPID_UR100{$upid})){	$skipee++; next;}
+	if(!exists($UPID_UR100{$upid})){	$skipped++; next;}
 	$ur100	=$UPID_UR100{$upid};
-	$ur90 	=$UPID_UR90{$upid};
+	$ur90 	=$UPID_UR90{$upid};  # FIXME: what is UPID_UR90 for?
 	$name	=$stuff[1];
 	$plen	=$stuff[2];
 	if($plen!~/\d/){$plen=$UR100_LEN{$ur100};}
@@ -403,7 +420,7 @@ while(<INUP>){
 	@NAMES=split('\(',$stuff[1]);
 	@GN=(); @KNS=();
 	#clean and get names 4+ characters
-	foreach my $n (@NAMES){ $n = $n; if($n!~/[A-Z]{4,}/){next;} push(@GN,$n);}
+	foreach my $i (@NAMES){ $i = $i; if($i!~/[A-Z]{4,}/){next;} push(@GN,$i);}  # TODO: what about the name cleaning?
 	while($GN[0]=~/\w/){ #get rid of duplicated names after clean
 		$n=shift(@GN);
 		if(grep $n, @KNS || grep $n, @GN){}
@@ -523,7 +540,7 @@ while(<INUP>){
 	#output cleaned uniprot
 	$out=join("\t",@FIN);
 	print OUTPINT "$upid\t$out\n";
-	if(progress($on)) {$time=localtime; print "on $on time $time out upids, skipped $skipee\n"; } $on++;
+	if(progress($on)) {$time=localtime; print "on $on time $time out upids, skipped $skipped\n"; } $on++;
 }
 close INUP;
 undef(%EC_RRXN);
@@ -539,18 +556,19 @@ undef(%UPID_UR90);
 undef(%UR100_TCDB);
 close(OUTPINT);
 $num_info_recs = keys %UR100_INFO;
-print "DONe on $on uniprots, skipped: $skipee; #INFO=$num_info_recs\n\n";
+print "DONE on $on uniprots, skipped: $skipped; #INFO=$num_info_recs\n\n";
 
 
 
 #COMPILE AND OUTPUT UNIREF
-$on=0; $time=localtime; $nolenskip=0;
+$on=0; $time=localtime; my $nolenskip = 0;
 print "OUTPUT UNIREF100 $time\n";
 #go thru all UniRef100s
 print OUTREF "UR100\tUR90\tName\tLength\t";
 print OUTREF "SigPep\tTMS\tDNA\tTaxonId\tMetal\tLoc\t";
 print OUTREF "TCDB\tCOG\tPfam\tTigr\tGene_Ont\tInterPro\tECs\t";
 print OUTREF "kegg\trhea\tbiocyc\n";
+my (@OUT, $nc, %extra_names, $ids);
 foreach my $ur100 (keys %UR100_LEN){
 	@OUT=();
 	$OUT[0]=$ur100;
@@ -601,11 +619,11 @@ undef(%UR100_INFO);
 
 ### SUBROUTINES ###
 sub CleanNames{
-	@GREEKS = ("α","β","γ","δ","ε","ζ","η","θ","ι","κ","λ","μ","ν","ξ","ο","π","ρ","ς","σ","τ","υ","φ","χ","ψ","ω");
-	@GREEKL = ("ALPHA","BETA","GAMMA","DELTA","EPSILON","ZETA","ETA","THETA","IOTA","KAPPA","LAMBDA","MU","NU","XI","OMICRON","PI","RHO","SIGMA","SIGMA","TAU","UPSILON","PHI","CHI","PSI","OMEGA");
-        $nameX = $_[0];
+	my @GREEKS = ("α","β","γ","δ","ε","ζ","η","θ","ι","κ","λ","μ","ν","ξ","ο","π","ρ","ς","σ","τ","υ","φ","χ","ψ","ω");
+	my @GREEKL = ("ALPHA","BETA","GAMMA","DELTA","EPSILON","ZETA","ETA","THETA","IOTA","KAPPA","LAMBDA","MU","NU","XI","OMICRON","PI","RHO","SIGMA","SIGMA","TAU","UPSILON","PHI","CHI","PSI","OMEGA");
+        my $nameX = $_[0];
         #remove junk punctuation/standardize
-        $sta=0; $end=1;
+        my $sta=0; my $end=1;
         while($end ne $sta){
                 $sta=$nameX;
                 #swap greek symbols for text
