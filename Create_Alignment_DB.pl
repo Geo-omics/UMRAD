@@ -63,7 +63,7 @@ while(<INURFA>){
             #}
             #$odd=join("|",@AA);
             #if($odd=~/[A-Z]/){ $UR100_NAME{$ur100} .= ";".$odd; }
-            if($on%10000000==0){$time=localtime; print "on $on time $time ur100 $ur100 odd $odd len $len tid $tid name $UR100_NAME{$ur100}\n";} $on++;
+            if(progress($on)){$time=localtime; print "on $on time $time ur100 $ur100 odd $odd len $len tid $tid name $UR100_NAME{$ur100}\n";} $on++;
             #if($on>10000000){last;}#!!!!
         }
 
@@ -88,11 +88,15 @@ if($ur100 and $len >= 10) {
     $UR100_INFO{$ur100}{7}{$tid}++;
     $UR100_LEN{$ur100}=$len;
     $UR100_NAME{$ur100}=$name;
+    $on++;
 }
-print "DONE $on lines\n";
+my $num_info_recs = keys %UR100_INFO;
+my $num_len_recs = keys %UR100_LEN;
+my $num_name_recs = keys %UR100_NAME;
+print "DONE $on lines #INFO=$num_info_recs #LEN=$num_len_recs #NAME=$num_name_recs\n\n";
 
 #LOAD IDMAP
-$on=0; $time=localtime;
+$on=0; $time=localtime; my $seq_missing=0; my $print_progress = 0; my $no_ur100 = 0;
 print "INPUT UNIREF TO UNIPROT MAPPING $time\n";
 $upid=''; $ur100=''; $ur90=''; @KEGG=(); $tid='';
 open(INMAP,  "unpigz -c $inidm |") || die "failed opening $inidm";
@@ -111,24 +115,30 @@ while(<INMAP>){
 		else{}
 	}
 	else{	#reached the next protein, set current data and reset
-		if($ur100 !~/UNIREF100/){$upid = ''; next;}
+		$on++;
+                if(progress($on)){ $print_progress=1};
+		if($ur100 !~/UNIREF100/){$upid = ''; $no_ur100++; next;}
+                if (!exists($UR100_LEN{$ur100})) {$seq_missing++;}
 		if($ur90 =~ /UNIREF90/){$UR100_UR90{$ur100}=$ur90;}
 		$UPID_UR100{$upid}=$ur100;
 		foreach my $k (@KEGG){ if($k=~/^R\d+$/){ $UR100_INFO{$ur100}{17}{$k}++; $UR90_INFO{$ur90}{17}{$k}++; }}
 		if($tid=~/^\d+$/){$UR100_INFO{$ur100}{7}{$tid}++;}
-                if($on%10000000==0){ $time=localtime;
+                if($print_progress){
+                    $print_progress = 0;
+                    $time = localtime;
                     $totupid = keys %UPID_UR100;
                     $totur1  = keys %UR100_UR90;
                     $time = localtime;
                     print "on $on time $time type $type upid $upid prot $prot ur100 $ur100 ur90 $ur90 id $id upid_ur100 $totupid UR100_UR90 $totur1\n";
                 }
-		$on++;
 		$upid='';
 	}
 	#if($on>1000000){last;}#!!!!
 }
 close INMAP;
-print "DONE $on (non-skipped) lines\n";
+my $num_info_recs = keys %UR100_INFO;
+my $num_upid2ur100 = keys %UPID_UR100;
+print "DONE $on UPIDs; but no sequence: $seq_missing, entries w/o UR100: $no_ur100; #INFO=$num_info_recs #UPID2UR100=$num_upid2ur100\n\n";
 
 
 
@@ -151,10 +161,10 @@ while(<INTRCH>){
         $chebi=join(";",@CHEBS);
         $TCDB_CPDS{$tcdb}=$chebi;
 	#print "chebi $chebi tcdb $tcdb\n";
-	if($on%1000000==0){$time=localtime; print "on $on $time tcdb $tcdb chebi $chebi\n";} $on++;
+	if(progress($on)){$time=localtime; print "on $on $time tcdb $tcdb chebi $chebi\n";} $on++;
 }
 close INTRCH;
-print "DONE $on lines\n";
+print "DONE $on lines\n\n";
 
 #INPUT TCDB ALIGNMENTS
 $time=localtime; $on=0;
@@ -188,11 +198,11 @@ while(<INTCDB>){
 			else{}
 	}	}
 
-	if($on%1000000==0){$time=localtime; print "on $on time $time tcdb $tcdb ur100 $ur100 sco $sco hascpd $HASCPD{$ur100}\n";} $on++;
-	#if($on>10000){last;} #!!!!
+	if(progress($on)){$time=localtime; print "on $on time $time tcdb $tcdb ur100 $ur100 sco $sco hascpd $HASCPD{$ur100}\n";} $on++;
+        #  if($on>10000){last;}
 }
 close INTCDB;
-print "DONE $on lines\n";
+print "DONE $on lines\n\n";
 undef(%HASCPD);
 undef(%UR100_TCDB_SCO);
 undef(%TCDB_CPDS);
@@ -214,13 +224,13 @@ while(<INKEGN>){
         $_=~s/[\r\n]+//;
         (my $kgene, my $rxn)=split("\t",$_);
 	$KGEN_KRXN{$kgene}{$rxn}++;
-        if($on%1000000==0){$time=localtime;
+        if(progress($on)) {$time=localtime;
                 print "on $on time $time kgene $kgene rxn $rxn cnt $KGEN_KRXN{$kgene}{$rxn}\n";
         } $on++;
 	#if($on>100000){last;}#!!!!
 }
 close INKEGN;
-print "DONE $on lines\n";
+print "DONE $on lines\n\n";
 
 #LOAD BIOCYC MONOMERS
 $time=localtime; $on=0;
@@ -232,13 +242,13 @@ while(<INBMON>){
         $_=~s/[\r\n]+//;
         (my $mono, my $rxn)=split("\t",$_);
 	$MONO_BRXN{$mono}{$rxn}++;
-        if($on%10000000==0){$time=localtime;
+        if(progress($on)) {$time=localtime;
                 print "on $on time $time mono $mono rxn $rxn cnt $MONO_BRXN{$mono}{$rxn}\n";
         } $on++;
 	#if($on>100000){last;}#!!!!
 }
 close INBMON;
-print "DONE $on lines\n";
+print "DONE $on lines\n\n";
 
 #GET FUNCTION NAMES
 $time=localtime; $on=0;
@@ -251,15 +261,14 @@ while(<INFN>){
 	(my $id, my $name)=split("\t",$_,-1);
 	$id=~s/\s//g;
 	$FUNC_NAMES{$id}=$name;
-        if($on%10000==0){$time=localtime;
+        if(progress($on)) {$time=localtime;
 		print "on $on time $time id $id name $name\n";
         } $on++;
 }
 close(INFN);
-print "DONE $on lines\n";
+print "DONE $on lines\n\n";
 ##############################################################
 ##############################################################
-
 
 
 #INPUT UNIPARC FUNCTIONS
@@ -328,10 +337,10 @@ while(<INRHRX>){
 	$ec	=$stuff[25];
 	if($ec=~/[\d\.]+/){ $EC_RRXN{$ec}{$rxn}++; }
 	if($upid=~/\w/){    $UPID_RRXN{$upid}{$rxn}++; }
-	if($on%1000000==0){ print "rrxn $rxn ec $ec upid $upid\n"; } $on++;
+	if(progress($on)) { print "rrxn $rxn ec $ec upid $upid\n"; } $on++;
 }
 close INRHRX;
-print "DONE $on lines\n";
+print "DONE $on lines\n\n";
 #KEGG
 $on=0; $time=localtime;
 print "INPUT KEGG RXN $time\n";
@@ -346,10 +355,10 @@ while(<INKGRX>){
 	$ec	=$stuff[25];
 	if($ec=~/[\d\.]+/){ $EC_KRXN{$ec}{$rxn}++; }
 	if($upid=~/\w/){    $UPID_KRXN{$upid}{$rxn}++; }
-	if($on%1000000==0){ print "krxn $rxn ec $ec upid $upid\n"; } $on++;
+	if(progress($on)) { print "krxn $rxn ec $ec upid $upid\n"; } $on++;
 }
 close INKGRX;
-print "DONE $on lines\n";
+print "DONE $on lines\n\n";
 #BIOCYC
 $on=0; $time=localtime;
 print "INPUT BIOCYC RXN $time\n";
@@ -364,10 +373,10 @@ while(<INBCRX>){
 	$ec	=$stuff[25];
 	if($ec=~/[\d\.]+/){ $EC_BRXN{$ec}{$rxn}++; }
 	if($upid=~/\w/){    $UPID_BRXN{$upid}{$rxn}++; }
-	if($on%1000000==0){ print "bioc $rxn ec $ec upid $upid\n"; } $on++;
+	if(progress($on)) { print "bioc $rxn ec $ec upid $upid\n"; } $on++;
 }
 close INBCRX;
-print "DONE $on lines\n";
+print "DONE $on lines\n\n";
 ##############################################################
 ##############################################################
 
@@ -531,7 +540,7 @@ while(<INUP>){
 	#output cleaned uniprot
 	$out=join("\t",@FIN);
 	print OUTPINT "$upid\t$out\n";
-	if($on%10000000==0){$time=localtime; print "on $on time $time out upids, skipped $skipee\n"; } $on++;
+	if(progress($on)) {$time=localtime; print "on $on time $time out upids, skipped $skipee\n"; } $on++;
 }
 close INUP;
 undef(%EC_RRXN);
@@ -546,12 +555,13 @@ undef(%UPID_UR100);
 undef(%UPID_UR90);
 undef(%UR100_TCDB);
 close(OUTPINT);
-print "final on $on uniprots\n";
+$num_info_recs = keys %UR100_INFO;
+print "DONe on $on uniprots, skipped: $skipee; #INFO=$num_info_recs\n\n";
 
 
 
 #COMPILE AND OUTPUT UNIREF
-$on=0; $time=localtime;
+$on=0; $time=localtime; $nolenskip=0;
 print "OUTPUT UNIREF100 $time\n";
 #go thru all UniRef100s
 print OUTREF "UR100\tUR90\tName\tLength\t";
@@ -590,10 +600,11 @@ foreach my $ur100 (keys %UR100_LEN){
 	}
 	$out=join("\t", @OUT);
 	print OUTREF "$out\n";
-	if($on%1000000==0){$time=localtime; print "on $on time $time ur100 $ur100 name $OUT[2]\n";} $on++;
+	if(progress($on)) {$time=localtime; print "on $on time $time ur100 $ur100 name $OUT[2]\n";} $on++;
 	delete($UR100_INFO{$ur100});
 }
-print "DONE $on lines\n";
+$time = localtime;
+print "DONE $on lines -- $time -- skipped $nolenskip\n\n";
 undef(%UR100_LEN);
 undef(%UR100_NAME);
 undef(%UR100_INFO);
@@ -689,4 +700,11 @@ sub mangle_locations {
         $locs{$i} = 1;
     }
     return join(';', sort(keys %locs));
+}
+
+sub progress {
+    my $on = shift;
+    return 1 if (grep {$_ == $on} (1, 10, 100, 1000, 10000, 100000, 1000000));
+    return 1 if ($on % 10000000 == 0);
+    return 0;
 }
