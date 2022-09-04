@@ -582,7 +582,7 @@ foreach my $ur100 (keys %UR100_LEN){
 	$ur90=$UR100_UR90{$ur100};
 	$OUT[1]=$ur90;
 	$OUT[2]=$UR100_NAME{$ur100};
-	$OUT[3]=$UR100_LEN{$ur100};
+	$OUT[3]=$UR100_LEN{$ur100} or do { $nolenskip++; next; };  # check if ur100s from sources besides the fasta get introduced
 
 	$nc=0;
 	for my $i (4..6){ $OUT[$i] = $UR100_INFO{$ur100}{$i};}
