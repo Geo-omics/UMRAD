@@ -3,7 +3,6 @@ use warnings;
 use Sort::Naturally 'nsort';
 
 
-#die;
 ##############################################################
 #OPEN FILES - CHECK
 ##############################################################
@@ -20,10 +19,6 @@ my $intcdb	= 'UR100vsTCDB.m8';		-e $intcdb || die "10 no $intcdb - please place 
 my $intrch	= 'getSubstrates.py';		-e $intrch || die "11 no $intrch - please place into this folder and restart\n";
 my $infn	= 'Function_Names.txt';		-e $infn   || die "12 no $infn - please place into this folder and restart\n";
 
-
-#output
-open(OUTPINT, ">", "OUT_UNIPROTtest.txt")||die;
-open(OUTREF, ">", "OUT_UNIREFtest.txt")||die;
 
 
 ##############################################################
@@ -125,7 +120,6 @@ while(<INMAP>){
                 }
 		$upid='';
 	}
-	#if($on>1000000){last;}#!!!!
 }
 close INMAP;
 $num_info_recs = keys %UR100_INFO;
@@ -172,7 +166,7 @@ while(<INTCDB>){
         @stuff=split("\t",$_,-1);
         $ur100 = $stuff[0];
         if($stuff[2]=~/([^\|]+$)/){$tcdb = "TCDB:".$1;}
-        else{$tcdb='';}
+        else {$tcdb = undef; print "WARNING: failed parsing a tcdb ID: $_ -- ${^LAST_FH}\n"; next;}  # this never happens, TODO: remove check?
         $pid  = $stuff[9];	if($pid < 80){next;}
         $cov  = $stuff[11];	if($cov < 80){next;}
         $sco  = $pid*$cov;
@@ -180,21 +174,23 @@ while(<INTCDB>){
         #get best hit, weight to tcdbID w/cpds
         if(!exists($UR100_TCDB{$ur100})){ 	#create ur100 - tcdb
 		$UR100_TCDB{$ur100}=$tcdb; 	
-		$UR100_TCDB_SCO{$ur100}=$sco; 	
-		if($TCDB_CPDS{$tcdb}=~/CHEBI/){$HASCPD{$ur100}=1;}
+		$UR100_TCDB_SCO{$ur100}=$sco;
+		if(exists($TCDB_CPDS{$tcdb}) and $TCDB_CPDS{$tcdb} =~ /CHEBI/) {$HASCPD{$ur100}=1;}
 		else{$HASCPD{$ur100}=0;}
 	}
-	else{ 	#already have a ur100-tcdb
-		if($sco > $UR100_TCDB_SCO{$ur100}){ 								#is a better scoring tcdb match
-			if($TCDB_CPDS{$tcdb}=~/CHEBI/){ 							#tcdb has cpd  
-				$HASCPD{$ur100}=1; $UR100_TCDB{$ur100}=$tcdb; $UR100_TCDB_SCO{$ur100}=$sco;} 	#current has better score and a chebi 
-			elsif($TCDB_CPDS{$tcdb}!~/CHEBI/ && $HASCPD{$ur100}==0){
-				$UR100_TCDB{$ur100}=$tcdb; $UR100_TCDB_SCO{$ur100}=$sco;} 			#no chebi but better score
-			else{}
-	}	}
+	else { 	#already have a ur100-tcdb
+            # TODO: review the logic here
+            if($sco > $UR100_TCDB_SCO{$ur100}) { 						    # is a better scoring tcdb match
+                if(exists($TCDB_CPDS{$tcdb}) and $TCDB_CPDS{$tcdb}=~/CHEBI/) {                      # tcdb has cpd
+                    $HASCPD{$ur100}=1; $UR100_TCDB{$ur100}=$tcdb; $UR100_TCDB_SCO{$ur100}=$sco;}    # current has better score and a chebi
+                elsif($HASCPD{$ur100}==0) {
+                    $UR100_TCDB{$ur100}=$tcdb; $UR100_TCDB_SCO{$ur100}=$sco;                        # no chebi but better score
+                }
+                else{}
+	    }
+        }
 
 	if(progress($on)){$time=localtime; print "on $on time $time tcdb $tcdb ur100 $ur100 sco $sco hascpd $HASCPD{$ur100}\n";} $on++;
-        #  if($on>10000){last;}
 }
 close INTCDB;
 print "DONE $on lines\n\n";
@@ -241,7 +237,6 @@ while(<INBMON>){
         if(progress($on)) {$time=localtime;
                 print "on $on time $time mono $mono rxn $rxn cnt $MONO_BRXN{$mono}{$rxn}\n";
         } $on++;
-	#if($on>100000){last;}#!!!!
 }
 close INBMON;
 print "DONE $on lines\n\n";
@@ -286,8 +281,11 @@ while(<INPARTAB>){
         @TIGR = split(';', $tigr);
         @IPR = split(';', $ipr);
 
-	$ur90=$UR100_UR90{$ur100};
-	if($ur90!~/UNIREF90/) {$ur90="UNIREF90_".$upid;}
+        # TODO: review the all the ur90 logic
+        if (exists($UR100_UR90{$ur100})) {
+            $ur90=$UR100_UR90{$ur100};
+	    if($ur90!~/UNIREF90/) {$ur90="UNIREF90_".$upid;}
+        } else {$ur90="UNIREF90_".$upid;}
 	if(!exists($UR90_INFO{$ur90})) {$ur90='';}
 
         #output functions
@@ -323,7 +321,7 @@ while(<INRHRX>){
         if($_!~/\w/){next;}
         $_=uc($_);
         $_=~s/[\r\n]+//;
-        @stuff	=split("\t",$_);
+        @stuff	=split("\t",$_, -1);
 	$rxn	=$stuff[0];
 	if($rxn !~ /^\d+$/){next;}
 	$upid	=$stuff[24];
@@ -343,7 +341,7 @@ while(<INKGRX>){
         if($_!~/\w/){next;}
         $_=uc($_);
         $_=~s/[\r\n]+//;
-        @stuff	=split("\t",$_);
+        @stuff	=split("\t",$_,-1);
 	$rxn	=$stuff[0];
 	$upid	=$stuff[24];
 	$ec	=$stuff[25];
@@ -362,7 +360,7 @@ while(<INBCRX>){
         if($_!~/\w/){next;}
         $_=uc($_);
         $_=~s/[\r\n]+//;
-        @stuff	=split("\t",$_);
+        @stuff	=split("\t",$_,-1);
 	$rxn	=$stuff[0];
 	$upid	=$stuff[24];
 	$ec	=$stuff[25];
@@ -381,6 +379,7 @@ print "DONE $on lines\n\n";
 ##### 		INPUT / OUTPUT UNIPROT DOWNLOAD		######
 ##############################################################
 $on=0; $time=localtime; $skipped = 0;
+open(OUTPINT, ">", "UNIPROT.csv") or die "failed opening output file for writing: $!";
 print "INPUT UNIPROT $time\n";
 print OUTPINT "UP-ID\tUR100\tUR90\tName\tLength\t";
 print OUTPINT "SigPep\tTMS\tDNA\tTaxonId\tMetal\tLoc\t";
@@ -395,7 +394,7 @@ while(<INUP>){
 	if($_!~/\w/){next;}
 	$_=uc($_);
 	$_=~s/[\r\n]+//;
-	@stuff=split("\t",$_);
+	@stuff=split("\t",$_,-1);
 
 	#screen bad entries
 	if($stuff[0] =~ /^(ENTRY|PID)/i){	$skipped++; next;}	#skip column headers
@@ -418,14 +417,16 @@ while(<INUP>){
 	@GN=(); @KNS=();
 	#clean and get names 4+ characters
 	foreach my $i (@NAMES){ $i = $i; if($i!~/[A-Z]{4,}/){next;} push(@GN,$i);}  # TODO: what about the name cleaning?
-	while($GN[0]=~/\w/){ #get rid of duplicated names after clean
+	while(@GN and $GN[0]=~/\w/){ #get rid of duplicated names after clean
 		$n=shift(@GN);
 		if(grep $n, @KNS || grep $n, @GN){}
 		else{ push(@KNS,$n); }
         }
 	@KNS=nsort(@KNS); 
 	$name=join(";",@KNS);
-	if($UR100_NAME{$ur100}=~/[A-Z]{4,}/ && $name !~ /[A-Z]{4,}/){ $name=$UR100_NAME{$ur100};}
+	if(exists($UR100_NAME{$ur100}) and $UR100_NAME{$ur100}=~/[A-Z]{4,}/ and $name !~ /[A-Z]{4,}/) {
+            $name=$UR100_NAME{$ur100};
+        }
 
 	#COMPILE/CLEAN UNIPROT ANNOTATIONS
 	$sig=''; 		if($stuff[7]=~/(\d+)\.\.(\d+)/){						$sig = "SIGNAL:".$1."..".$2;}
@@ -433,7 +434,10 @@ while(<INUP>){
 	$tms=''; @TMS=(); 	if($stuff[8]=~/TRANSMEM|TMS/){@TMS = ($stuff[8]=~/(\d+\.\.\d+)/g); 		$tms  = join(";",@TMS); $tms="TMS:".$tms;}
 
 	$tcp=''; @TCDBS=();	@TCDBS = ($stuff[9]=~/([A-Z\d\.]+)/g); #UNIPROT ANNOTATED TCDBS
-		if($UR100_TCDB{$ur100}=~/[A-Z\d\.]+/){push(@TCDBS,$UR100_TCDB{$ur100});} #ALIGNMENT ANNOTATED TCDBS
+		if(exists($UR100_TCDB{$ur100}) and $UR100_TCDB{$ur100}=~/[A-Z\d\.]+/) {
+                    #ALIGNMENT ANNOTATED TCDBS
+                    push(@TCDBS,$UR100_TCDB{$ur100});
+                }
 		for my $i (0..$#TCDBS){ if( $TCDBS[$i] !~ /^TCDB/ && $TCDBS[$i]=~/\w/){ $TCDBS[$i]="TCDB:".$TCDBS[$i]; }} 
 		%seen=(); @TCDBS = grep{ !$seen{$_}++ } @TCDBS;							$tcp = join(";", @TCDBS);
 
@@ -470,25 +474,29 @@ while(<INUP>){
 	# MATCH RHEA/KEGG/BIOCYC ECs data with uniprot IDs to get the related rxn
 
 	# changed sort approach !!!test 
-	foreach my $rxn (sort{$b<=>$a} keys %{$UPID_BRXN{$upid}}){ 	if($rxn=~/\w/){$BRXN{$rxn}++; }}
-	foreach my $rxn (sort{$b<=>$a} keys %{$UPID_RRXN{$upid}}){ 	if($rxn=~/\w/){$RRXN{$rxn}++; }}
-	foreach my $rxn (sort{$b<=>$a} keys %{$UPID_KRXN{$upid}}){ 	if($rxn=~/\w/){$KRXN{$rxn}++; }}
+	foreach my $rxn (sort{$b cmp $a} keys %{$UPID_BRXN{$upid}}){ 	if($rxn=~/\w/){$BRXN{$rxn}++; }}
+	foreach my $rxn (sort{$b cmp $a} keys %{$UPID_RRXN{$upid}}){ 	if($rxn=~/\w/){$RRXN{$rxn}++; }}
+	foreach my $rxn (sort{$b cmp $a} keys %{$UPID_KRXN{$upid}}){ 	if($rxn=~/\w/){$KRXN{$rxn}++; }}
 
 	foreach my $ec 	(@ECS){ #match RHEA/KEGG/BIOCYC ECs data with uniprot ECs to get the related rxn 
-		foreach my $rxn (sort{$b<=>$a} keys %{$EC_BRXN{$ec}}){  if($rxn=~/\w/){$BRXN{$rxn}++; }}
-		foreach my $rxn (sort{$b<=>$a} keys %{$EC_RRXN{$ec}}){  if($rxn=~/\w/){$RRXN{$rxn}++; }}
-		foreach my $rxn (sort{$b<=>$a} keys %{$EC_KRXN{$ec}}){	if($rxn=~/\w/){$KRXN{$rxn}++; }}}
+            foreach my $rxn (sort{$b cmp $a} keys %{$EC_BRXN{$ec}}){ if($rxn=~/\w/){$BRXN{$rxn}++; }}
+            foreach my $rxn (sort{$b cmp $a} keys %{$EC_RRXN{$ec}}){ if($rxn=~/\w/){$RRXN{$rxn}++; }}
+            foreach my $rxn (sort{$b cmp $a} keys %{$EC_KRXN{$ec}}){ if($rxn=~/\w/){$KRXN{$rxn}++; }}
+        }
 
 	foreach my $mon (@MON){#biocyc monomers
-                foreach my $rxn (sort{$b<=>$a} keys %{$MONO_BRXN{$mon}}){if($rxn=~/\w/){$BRXN{$rxn}++; }}}
+            foreach my $rxn (sort{$b cmp $a} keys %{$MONO_BRXN{$mon}}){if($rxn=~/\w/){$BRXN{$rxn}++; }}
+        }
 	foreach my $kg (@KEGS){#kegg genes
-		foreach my $rxn (sort{$b<=>$a} keys %{$KGEN_KRXN{$kg}}){if($rxn=~/\w/){$KRXN{$rxn}++; }}}
-	foreach my $rxn (@RHEA){ 					if($rxn=~/\w/){$RRXN{$rxn}++; }}
+            foreach my $rxn (sort{$b cmp $a} keys %{$KGEN_KRXN{$kg}}) {if($rxn=~/\w/){$KRXN{$rxn}++; }}
+        }
+	foreach my $rxn (@RHEA){ 				       if($rxn=~/\w/){$RRXN{$rxn}++; }
+        }
 
 	@BIO=(); @RHE=(); @KEG=();
-	foreach my $rxn (sort{$BRXN{$b}<=>$BRXN{$a}} keys %BRXN){ push(@BIO,$rxn); }
-	foreach my $rxn (sort{$RRXN{$b}<=>$RRXN{$a}} keys %RRXN){ push(@RHE,$rxn); }
-	foreach my $rxn (sort{$KRXN{$b}<=>$KRXN{$a}} keys %KRXN){ push(@KEG,$rxn); }
+	foreach my $rxn (sort{$BRXN{$b} cmp $BRXN{$a}} keys %BRXN){ push(@BIO,$rxn); }
+	foreach my $rxn (sort{$RRXN{$b} cmp $RRXN{$a}} keys %RRXN){ push(@RHE,$rxn); }
+	foreach my $rxn (sort{$KRXN{$b} cmp $KRXN{$a}} keys %KRXN){ push(@KEG,$rxn); }
 	$kegg=join(";",@KEG);
 	$rhea=join(";",@RHE);
 	$bioc=join(";",@BIO);
@@ -539,6 +547,10 @@ while(<INUP>){
 	if(progress($on)) {$time=localtime; print "on $on time $time out upids, skipped $skipped\n"; } $on++;
 }
 close INUP;
+close(OUTPINT) or die "failed closing output filehandle: $!";;
+$num_info_recs = keys %UR100_INFO;
+$time = localtime;
+print "DONE on $on uniprots $time skipped: $skipped; #INFO=$num_info_recs\n\n";
 undef(%EC_RRXN);
 undef(%UPID_RRXN);
 undef(%EC_KRXN);
@@ -549,9 +561,8 @@ undef(%MONO_BRXN);
 undef(%KGEN_KRXN);
 undef(%UPID_UR100);
 undef(%UR100_TCDB);
-close(OUTPINT);
-$num_info_recs = keys %UR100_INFO;
-print "DONE on $on uniprots, skipped: $skipped; #INFO=$num_info_recs\n\n";
+$time = localtime;
+print "DONE freed mem $time\n";
 
 
 
@@ -559,6 +570,7 @@ print "DONE on $on uniprots, skipped: $skipped; #INFO=$num_info_recs\n\n";
 $on=0; $time=localtime; my $nolenskip = 0;
 print "OUTPUT UNIREF100 $time\n";
 #go thru all UniRef100s
+open(OUTREF, ">", "UNIREF_INFO.csv") or die "failed to write output file: $1\n";
 print OUTREF "UR100\tUR90\tName\tLength\t";
 print OUTREF "SigPep\tTMS\tDNA\tTaxonId\tMetal\tLoc\t";
 print OUTREF "TCDB\tCOG\tPfam\tTigr\tGene_Ont\tInterPro\tECs\t";
@@ -579,15 +591,19 @@ foreach my $ur100 (keys %UR100_LEN){
 		@IDS=();
 		foreach my $id (keys %{$UR100_INFO{$ur100}{$i}}){ if($id=~/\w/){push(@IDS,$id);}}
                 if ($ur90) {
-		    if($IDS[0]!~/\w/){ foreach my $id (keys %{$UR90_INFO{$ur90}{$i}}){ if($id=~/\w/){push(@IDS,$id);}}}
+		    if(!@IDS or $IDS[0]!~/\w/){ foreach my $id (keys %{$UR90_INFO{$ur90}{$i}}){ if($id=~/\w/){push(@IDS,$id);}}}
                 }
                 %seen=(); @IDS = grep{ !$seen{$_}++ } @IDS;
 
 		foreach my $id (@IDS){	
-			if($OUT[2]=~/(HYPOTHETICAL|UNCHARACTERIZED|UNDESCRIBED|UNKNOWN|PUTATIVE|UNIDENTIFIED|UNCLASSIFIED|UNASSIGNED)/){
-				if($FUNC_NAMES{$id}!~/(HYPOTHETICAL|UNCHARACTERIZED|UNDESCRIBED|UNKNOWN|PUTATIVE|UNIDENTIFIED|UNCLASSIFIED|UNASSIGNED)/){
-					if($FUNC_NAMES{$id}=~/\w/ && $nc<4 ){ $extra_names{$FUNC_NAMES{$id}}++; $nc++; }  # TODO: split func names by semi-colon?
-		}	}	}
+                    if (exists($FUNC_NAMES{$id})) {
+		        if($OUT[2]=~/(HYPOTHETICAL|UNCHARACTERIZED|UNDESCRIBED|UNKNOWN|PUTATIVE|UNIDENTIFIED|UNCLASSIFIED|UNASSIGNED)/) {
+			    if($FUNC_NAMES{$id}!~/(HYPOTHETICAL|UNCHARACTERIZED|UNDESCRIBED|UNKNOWN|PUTATIVE|UNIDENTIFIED|UNCLASSIFIED|UNASSIGNED)/) {
+				if($FUNC_NAMES{$id}=~/\w/ && $nc<4 ){ $extra_names{$FUNC_NAMES{$id}}++; $nc++; }  # TODO: split func names by semi-colon?
+		            }
+                        }
+                    }
+                }
 		
 		@IDS = nsort(@IDS);
 		$ids=join(";",@IDS);
@@ -597,15 +613,13 @@ foreach my $ur100 (keys %UR100_LEN){
         if (keys %extra_names) {
             $OUT[2]=join(';', sort(keys %extra_names)).";".$OUT[2];
         }
-	$out=join("\t", @OUT);
+	$out=join("\t", map {defined($_) ? ($_) : ('')} @OUT);
 	print OUTREF "$out\n";
 	if(progress($on)) {$time=localtime; print "on $on time $time ur100 $ur100 name $OUT[2]\n";} $on++;
 }
+close OUTREF or die "failed closing output filehandle: $!";
 $time = localtime;
-print "DONE $on lines -- $time -- skipped $nolenskip\n\n";
-undef(%UR100_LEN);
-undef(%UR100_NAME);
-undef(%UR100_INFO);
+print "DONE $on lines -- $time -- skipped $nolenskip\n";
 
 
 
