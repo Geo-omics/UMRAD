@@ -5,222 +5,273 @@ from glob import glob
 configfile: "snakemake/config.yaml"
 report: "code/report/workflow.rst"
 
-db_version = "FEB_2022"
+db_version = "JUL_2022"
 
 rule all:
     input:
-        expand("Universal_Microbiomics_Alignment_Database/UNIPROT_INFO_{version}.txt.gz",version = db_version),
-        expand("outputs/TAXONOMY_DB_{version}.txt", version = db_version),
-        expand("outputs/all_compound_info_{version}.txt", version = db_version),
-        expand("outputs/all_reaction_info_{version}.txt", version = db_version),
-        expand("Universal_Microbiomics_Alignment_Database/UNIPROT_INFO_{version}.txt.gz", version = db_version),
-        expand("Fix_RNACentral_Taxonomy/rnacentral_clean_{version}.fasta.gz", version = db_version),
-        expand("outputs/all_reaction_info_{version}.txt", version = db_version)
-        
+        expand("outputs/TAXONOMY_DB_{version}.txt",version = "JUN_2022"),
+        expand("Universal_Microbiomics_Alignment_Database/UNIPROT_INFO_{version}.txt.gz",version = "JUN_2022"),
+        "BIOCYC_NF",
+        ".get_function_names",
+        ".biocyc_monomers_converted",
+        "KEGG_GENES_RXN.txt",
+        ".convert_kegg_genes",
+        "BIOCYC_RXN_DB.txt",
+        "BIOCYC_CPD_DB.txt",
+        "KEGG_RXN_DB.txt",
+        "KEGG_CPD_DB.txt",
+        "PATHBANK_CPD_DB.txt",
+        "HMDB_CPD_DB.txt",
+        "PUBCHEM_CPD_DB.txt",
+        "CHEBI_CPD_DB.txt",
+        "RHEA_RXN_DB.txt",
+        "MERGED_CPD_DB.txt",
+        "MERGED_RXN_DB.txt"
 
-rule download_taxdump:
-    output: "INPUTS/new_taxdump.tar.gz"
+rule make_rulegraph:
+    output:
+        "rulegraph.pdf",
+        "rulegraph.png"
     shell:
         """
-        cd INPUTS
+        snakemake all --rulegraph --dry-run | dot -Tpdf > rulegraph.pdf
+        snakemake all --rulegraph --dry-run | dot -Tpng > rulegraph.png
+        """
+
+rule download_taxdump:
+    output: "INPUTS/taxonomy/new_taxdump.tar.gz"
+    shell:
+        """
+        mkdir -p INPUTS/taxonomy
+        cd INPUTS/taxonomy
         wget -O new_taxdump.tar.gz https://ftp.ncbi.nih.gov/pub/taxonomy/new_taxdump/new_taxdump.tar.gz
         """
 
 rule build_tax_db:
     # Build the taxonomy database
     input:
-        taxdump = "INPUTS/new_taxdump.tar.gz",
+        taxdump = "INPUTS/taxonomy/new_taxdump.tar.gz",
         img_genomes = "INPUTS/manual_inputs/tax_db/All_IMG_Genomes.txt",
         ictv = "INPUTS/manual_inputs/tax_db/ICTV.txt"
     output:
         tax_db_tsv = "outputs/TAXONOMY_DB_{version}.txt",
         tax_db_cyto = "outputs/TAXONOMY_DB_{version}.cyto"
-    log: "logs/tax_db_{version}.log"
-    benchmark: "benchmark/tax_db_{version}.txt"
+    log: "snakemake/logs/tax_db/tax_db_{version}.log"
+    benchmark: "snakemake/benchmarks/tax_db/tax_db_{version}.txt"
     resources: cpus = 1, mem_mb = 16000, time_min = 7200
     shell:
         """
+        PROJ_ROOT=$PWD
+        
         # Cleanup old database
         rm -rf Universal-Taxonomy-Database
         
-        printf "\n\n######\nStarted at $(date)\n######\n\n" | tee {log}
-        start=`date +%s` | tee -a {log}
+        printf "\n\n######\nStarted at $(date)\n######\n\n" | tee $PROJ_ROOT/{log}
+        start=`date +%s` | tee -a $PROJ_ROOT/{log}
 
         # Download GitHub Repository
-        printf "\n\n######\nCloning GitHub Repository\n######\n\n" | tee -a {log}
-        git clone https://github.com/TealFurnholm/Universal-Taxonomy-Database.git
+        printf "\n\n######\nCloning GitHub Repository\n######\n\n" | tee -a $PROJ_ROOT/{log}
+        git clone https://github.com/TealFurnholm/Universal-Taxonomy-Database.git | tee -a $PROJ_ROOT/{log}
 
         # Copy files obtained manually to working directory
-        cp manual_inputs/tax_db/* Universal-Taxonomy-Database/
+        ln INPUTS/manual_inputs/tax_db/* Universal-Taxonomy-Database/
 
         # Enter working directory
         cd $PWD/Universal-Taxonomy-Database
 
         # Run the database construction scripts
-        printf "\n\n######\nRunning perl script 1 of 3\n######\n\n" | tee -a {log}
-        perl Create_Taxonomy_Database_1of3.pl | tee -a {log}
+        printf "\n\n######\nRunning perl script 1 of 3\n######\n\n" | tee -a $PROJ_ROOT/{log}
+        perl Create_Taxonomy_Database_1of3.pl | tee -a $PROJ_ROOT/{log}
 
-        printf "\n\n######\nRunning perl script 2 of 3\n######\n\n" | tee -a {log}
-        perl Create_Taxonomy_Database_2of3.pl | tee -a {log}
+        printf "\n\n######\nRunning perl script 2 of 3\n######\n\n" | tee -a $PROJ_ROOT/{log}
+        perl Create_Taxonomy_Database_2of3.pl | tee -a $PROJ_ROOT/{log}
 
-        printf "\n\n######\nRunning perl script 3 of 3\n######\n\n" | tee -a {log}
-        perl Create_Taxonomy_Database_3of3.pl | tee -a {log}
+        printf "\n\n######\nRunning perl script 3 of 3\n######\n\n" | tee -a $PROJ_ROOT/{log}
+        perl Create_Taxonomy_Database_3of3.pl | tee -a $PROJ_ROOT/{log}
 
         cp TAXONOMY_DB_*.txt ../outputs/
         cp TAXONOMY_DB_*.cyto ../outputs/
 
-        end=`date +%s` | tee -a {log}
-        printf "\n\n######\nEnded at $(date)\nRuntime was `expr $end - $start` seconds\n######\n\n" | tee -a {log}
+        end=`date +%s` | tee -a $PROJ_ROOT/{log}
+        printf "\n\n######\nEnded at $(date)\nRuntime was `expr $end - $start` seconds\n######\n\n" | tee -a $PROJ_ROOT/{log}
         """
 
 
-# rule git_clone_compounds_DB:
-#     output: 
-#         db_dir = directory("Universal_Biological_Compounds_Database")
-#     shell:
-#         """
-#         printf "\n\n######\nCloning GitHub Repository\n######\n\n" | tee -a $PROJ_ROOT/{log}
-#         git clone https://github.com/TealFurnholm/Universal_Biological_Compounds_Database.git | tee -a $PROJ_ROOT/{log}
-#         """
-
-
-rule prepare_compounds_db_inputs:
-    input: "Universal_Biological_Compounds_Database"
+rule get_biocyc:
+    input: 
+        script = "Get_BioCyc.pl"
     output:
-        biocyc_file_list = "Universal_Biological_Compounds_Database/biocyc_files.txt",
-        biocyc_dir = directory("Universal_Biological_Compounds_Database/BIOCYC_NF")
-    log: "logs/prepare_compounds_db_inputs.log"
-    benchmark: "benchmarks/prepare_compounds_db_inputs.txt"
+        #directory("BIOCYC_NF")
+        touch("get_biocyc.done")
+    params:
+        BIOCYC_FLATS_URL="http://brg-files.ai.sri.com/subscription/dist/flatfiles-52983746/index.html",
+        BIOCYC_USER="biocyc-flatfiles",
+        BIOCYC_PASS="data-20541"
+    log: "snakemake/logs/biocyc/get_biocyc.log"
+    benchmark: "snakemake/benchmarks/biocyc/get_biocyc.log"
     shell:
         """
-        touch {log} #make log file
-        PROJ_ROOT=$(pwd)
-
-        # Set variables here
-        BIOCYC_FLATS_URL="http://brg-files.ai.sri.com/subscription/dist/flatfiles-52983746/index.html"
-        BIOCYC_USER="biocyc-flatfiles"
-        BIOCYC_PASS="data-20541"
-
-        # Download latest code for Universal Compounds database
-        printf "\n\n######\nStarted at $(date)\n######\n\n" | tee $PROJ_ROOT/{log}
-        start=`date +%s` | tee -a $PROJ_ROOT/{log}
-        
-        # Enter directory containing Universal Compounds Database
-        cd $PWD/Universal_Biological_Compounds_Database
-
-        printf "\n\n######\nGetting function names\n######\n\n" | tee -a $PROJ_ROOT/{log}
-        perl Get_Function_Names.pl | tee -a $PROJ_ROOT/{log}
+        PROJ_ROOT=$PWD
+        #mkdir -p {output}
+        #cd {output}
 
         printf "\n\n######\nDownloading flat file index\n######\n\n" | tee -a $PROJ_ROOT/{log}
-        wget -O biocyc_web.txt $BIOCYC_FLATS_URL | tee -a $PROJ_ROOT/{log}
+        wget -O biocyc_web.txt {params.BIOCYC_FLATS_URL} | tee -a $PROJ_ROOT/{log}
 
         printf "\n\n######\nParsing file file index\n######\n\n" | tee -a $PROJ_ROOT/{log}
         grep -oP "http.*\.tar\.gz" biocyc_web.txt > biocyc_files.txt
 
         printf "\n\n######\nGetting BioCyc with Get_BioCyc.pl\n######\n\n" | tee -a $PROJ_ROOT/{log}
-        perl Get_BioCyc.pl -pwd=$BIOCYC_PASS -usr=$BIOCYC_USER -in=biocyc_files.txt | tee -a $PROJ_ROOT/{log}
+        perl $PROJ_ROOT/{input.script} -pwd={params.BIOCYC_PASS} -usr={params.BIOCYC_USER} -in=biocyc_files.txt | tee -a $PROJ_ROOT/{log}
         """
 
-rule download_pathbank_metabolites:
-    output: "INPUTS/pathbank_all_metabolites.csv.zip"
-    shell:
-        """
-        cd INPUTS
-        wget -N https://pathbank.org/downloads/pathbank_all_metabolites.csv.zip
-        """
-
-rule download_hmdb_metabolites:
-    output: "INPUTS/hmdb_metabolites.zip"
-    shell:
-        """
-        cd INPUTS
-        wget -N https://hmdb.ca/system/downloads/current/hmdb_metabolites.zip
-        """
-
-rule download_pubchem_chebi:
-    output: "INPUTS/PubChem_substance_text_chebi_summary.csv"
-    shell:
-        """
-        cd INPUTS
-        wget -O PubChem_substance_text_chebi_summary.csv 'https://pubchem.ncbi.nlm.nih.gov/sdq/sdqagent.cgi?infmt=json&outfmt=csv&query={%22download%22:%22*%22,%22collection%22:%22substance%22,%22where%22:{%22ands%22:[{%22*%22:%22chebi%22}]},%22order%22:[%22relevancescore,desc%22],%22start%22:1,%22limit%22:10000000,%22downloadfilename%22:%22PubChem_substance_text_chebi%22}'
-        """
-
-rule download_pubchem_biocyc:
-    output: "INPUTS/PubChem_substance_text_biocyc_summary.csv"
-    shell:
-        """
-        cd INPUTS
-        wget -O PubChem_substance_text_biocyc_summary.csv 'https://pubchem.ncbi.nlm.nih.gov/sdq/sdqagent.cgi?infmt=json&outfmt=csv&query={%22download%22:%22*%22,%22collection%22:%22substance%22,%22where%22:{%22ands%22:[{%22*%22:%22biocyc%22}]},%22order%22:[%22relevancescore,desc%22],%22start%22:1,%22limit%22:10000000,%22downloadfilename%22:%22PubChem_substance_text_biocyc%22}'
-        """
-
-rule download_pubchem_hmdb:
-    output: "INPUTS/PubChem_substance_text_hmdb_summary.csv"
-    shell:
-        """
-        cd INPUTS
-        wget -O PubChem_substance_text_hmdb_summary.csv 'https://pubchem.ncbi.nlm.nih.gov/sdq/sdqagent.cgi?infmt=json&outfmt=csv&query={%22download%22:%22*%22,%22collection%22:%22substance%22,%22where%22:{%22ands%22:[{%22*%22:%22hmdb%22}]},%22order%22:[%22relevancescore,desc%22],%22start%22:1,%22limit%22:10000000,%22downloadfilename%22:%22PubChem_substance_text_hmdb%22}'
-        """
-
-rule download_pubchem_kegg:
-    output: "INPUTS/PubChem_substance_text_kegg_summary.csv"
-    shell:
-        """
-        cd INPUTS
-        wget -O PubChem_substance_text_kegg_summary.csv 'https://pubchem.ncbi.nlm.nih.gov/sdq/sdqagent.cgi?infmt=json&outfmt=csv&query={%22download%22:%22*%22,%22collection%22:%22substance%22,%22where%22:{%22ands%22:[{%22*%22:%22kegg%22}]},%22order%22:[%22relevancescore,desc%22],%22start%22:1,%22limit%22:10000000,%22downloadfilename%22:%22PubChem_substance_text_kegg%22}'
-        """
-
-rule download_chebi_ontology:
-    output: "INPUTS/chebi.owl"
-    shell:
-        """
-        cd INPUTS
-        wget -N https://ftp.ebi.ac.uk/pub/databases/chebi/ontology/chebi.owl
-        """
-
-rule build_compounds_db:
-    # This script builds the compounds database
-    # This script includes login information for BioCyc and should not be uploaded to a public directory while including such information
-    input:
-        rules.download_pathbank_metabolites.output,
-        rules.download_hmdb_metabolites.output,
-        rules.download_pubchem_chebi.output,
-        rules.download_pubchem_biocyc.output,
-        rules.download_pubchem_hmdb.output,
-        rules.download_pubchem_kegg.output,
-        rules.download_chebi_ontology.output,
-        tax_db = rules.build_tax_db.output.tax_db_tsv
-    output:
-        compounds_db = "outputs/all_compound_info_{version}.txt",
-        function_names = "outputs/Function_Names_{version}.txt"
-    log: "logs/compounds_db_{version}.log"
-    benchmark: "benchmark/compounds_db_{version}.txt"
-    resources: cpus=1
-    shell:
-        """
-        # Change to directory containing Universal Compounds Database
-        cd $PWD/Universal_Biological_Compounds_Database
-
-        perl Create_Compounds_Database.pl | tee {log}
-
-        ln all_*.txt ../outputs/
-        ln Function_Names_*.txt ../outputs/
-        """
-
-rule build_reactions_db:
+rule get_function_names:
     input: 
-        tax_db = rules.build_tax_db.output.tax_db_tsv,
-        compounds_db = rules.build_compounds_db.output.compounds_db
-    output: 
-        rxn_db = "outputs/all_reaction_info_{version}.txt"
-    log: "logs/reactions_db_{version}.log"
-    benchmark: "benchmark/reactions_db_{version}.txt"
-    resources: cpus=1
+        script = "Get_Function_Names.pl"
+    output:
+        #directory("INPUTS/function_names")
+        "Function_Names.txt",
+        touch(".get_function_names")
+    log: "snakemake/logs/get_function_names/get_function_names.log"
+    benchmark: "snakemake/benchmarks/get_function_names/get_function_names.log"
     shell:
         """
-        cd $PWD/Universal_Biological_Compounds_Database
+        PROJ_ROOT=$PWD
+        #mkdir -p {output}
+        #cd {output}
 
-        perl Create_Reactions_Database.pl | tee {log}
-        cp all_*.txt ../outputs/
+        perl $PROJ_ROOT/{input.script} | tee $PROJ_ROOT/{log}
+
+        printf "\n\n######\nCompleted.\n######\n\n" | tee -a $PROJ_ROOT/{log}
+        """
+    
+rule convert_BioCyc_monomers:
+    input: 
+        "get_biocyc.done",
+        script = "Convert_BioCyc_Monomers.pl",
+        #biocyc_dir = "BIOCYC_NF"
+        #biocyc_dir = directory("/geomicro/data2/kiledal/old_UMRAD/Universal_Biological_Compounds_Database/BIOCYC_NF") #for testing before new download is done
+    params:
+        biocyc_dir = "BIOCYC_NF"
+    output:
+        touch(".biocyc_monomers_converted"),
+        "BIOCYC_NF/BIOCYC_MONO_RXNS.txt"
+    log: "snakemake/logs/convert_BioCyc_monomers/convert_BioCyc_monomers.log"
+    benchmark: "snakemake/benchmarks/convert_BioCyc_monomers/convert_BioCyc_monomers.log"
+    shell:
+        """
+        PROJ_ROOT=$PWD
+        cd {params.biocyc_dir}
+
+        perl $PROJ_ROOT/{input.script} | tee $PROJ_ROOT/{log}
+        """
+
+rule convert_kegg_genes:
+    input: 
+        script = "Convert_Kegg_Genes.pl"
+    output: 
+        #directory("INPUTS/kegg")
+        "KEGG_GENES_RXN.txt",
+        touch(".convert_kegg_genes")
+    log: "snakemake/logs/convert_kegg_genes/convert_kegg_genes.log"
+    benchmark: "snakemake/benchmarks/convert_kegg_genes/convert_kegg_genes.log"
+    shell:
+        """
+        PROJ_ROOT=$PWD
+        #mkdir -p {output}
+        #cd {output}
+
+        perl $PROJ_ROOT/{input.script} | tee $PROJ_ROOT/{log}
+        """
+
+rule create_biocyc_cpd_rxn_db:
+    input: 
+        script = "Create_CPD-RXN-DB_BIOCYC.pl",
+    output: 
+        "BIOCYC_RXN_DB.txt",
+        "BIOCYC_CPD_DB.txt"
+    conda: "snakemake/conda_yaml/main.yaml"
+    log: "snakemake/logs/create_biocyc_cpd_rxn_db/create_biocyc_cpd_rxn_db.log"
+    benchmark: "snakemake/benchmarks/create_biocyc_cpd_rxn_db/create_biocyc_cpd_rxn_db.log"
+    shell:
+        """
+        PROJ_ROOT=$PWD
+
+        perl $PROJ_ROOT/{input.script} | tee $PROJ_ROOT/{log}
+        """
+
+rule create_kegg_cpd_rxn_db:
+    input: 
+        script = "Create_CPD-RXN-DB_KEGG.pl",
+        kegg_genes = "KEGG_GENES_RXN.txt"
+    output:
+        "KEGG_RXN_DB.txt",
+        "KEGG_CPD_DB.txt"
+    conda: "snakemake/conda_yaml/main.yaml"
+    log: "snakemake/logs/create_kegg_cpd_rxn_db/create_kegg_cpd_rxn_db.log"
+    benchmark: "snakemake/benchmarks/create_kegg_cpd_rxn_db/create_kegg_cpd_rxn_db.log"
+    shell:
+        """
+        PROJ_ROOT=$PWD
+
+        perl $PROJ_ROOT/{input.script} | tee $PROJ_ROOT/{log}
+        """
+
+rule create_other_cpd_rxn_db:
+    input: 
+        script = "Create_CPD-RXN-DB_OTHERDB.pl"
+    output:
+        "PATHBANK_CPD_DB.txt",
+        "HMDB_CPD_DB.txt",
+        "PUBCHEM_CPD_DB.txt"
+    conda: "snakemake/conda_yaml/main.yaml"
+    log: "snakemake/logs/create_other_cpd_rxn_db/create_other_cpd_rxn_db.log"
+    benchmark: "snakemake/benchmarks/create_other_cpd_rxn_db/create_other_cpd_rxn_db.log"
+    shell:
+        """
+        PROJ_ROOT=$PWD
+
+        perl $PROJ_ROOT/{input.script} | tee $PROJ_ROOT/{log}
+        """
+
+rule create_rhea_cpd_rxn_db:
+    input: 
+        script = "Create_CPD-RXN-DB_RHEA.pl",
+    output:
+        "CHEBI_CPD_DB.txt",
+        "RHEA_RXN_DB.txt"
+    conda: "snakemake/conda_yaml/main.yaml"
+    log: "snakemake/logs/create_rhea_cpd_rxn_db/create_rhea_cpd_rxn_db.log"
+    benchmark: "snakemake/benchmarks/create_rhea_cpd_rxn_db/create_rhea_cpd_rxn_db.log"
+    shell:
+        """
+        PROJ_ROOT=$PWD
+
+        perl $PROJ_ROOT/{input.script} | tee $PROJ_ROOT/{log}
+        """
+
+rule merge_dbs:
+    input: 
+        "PATHBANK_CPD_DB.txt",
+        "PUBCHEM_CPD_DB.txt",
+        "HMDB_CPD_DB.txt",
+        "KEGG_CPD_DB.txt",
+        "BIOCYC_CPD_DB.txt",
+        "CHEBI_CPD_DB.txt",
+        script = "Merge_CPD_DB.pl"
+    output:
+        "MERGED_CPD_DB.txt",
+        "MERGED_RXN_DB.txt"
+    conda: "snakemake/conda_yaml/main.yaml"
+    log: "snakemake/logs/merge_dbs/merge_dbs.log"
+    benchmark: "snakemake/benchmarks/merge_dbs/merge_dbs.log"
+    shell:
+        """
+        PROJ_ROOT=$PWD
+
+        perl $PROJ_ROOT/{input.script} | tee $PROJ_ROOT/{log}
+
+        cat *RXN_DB.txt > MERGED_RXN_DB.txt
         """
 
 rule get_alignemnt_db_git:
@@ -243,7 +294,6 @@ rule get_uniref:
     shell:
         """
         cd Universal_Microbiomics_Alignment_Database
-
         wget -N https://ftp.uniprot.org/pub/databases/uniprot/uniref/uniref100/uniref100.fasta.gz
         """
 
@@ -253,7 +303,6 @@ rule get_uniparc:
     shell:
         """
         cd Universal_Microbiomics_Alignment_Database
-
         wget -N https://ftp.uniprot.org/pub/databases/uniprot/current_release/uniparc/uniparc_all.xml.gz
         """
 
@@ -264,7 +313,6 @@ rule get_uniprot_mapping:
     shell:
         """
         cd Universal_Microbiomics_Alignment_Database
-
         wget -N https://ftp.uniprot.org/pub/databases/uniprot/current_release/knowledgebase/idmapping/idmapping.dat.gz
         zcat idmapping.dat.gz | grep -P "(UniRef100|UniRef90)" | gzip > uniprot_to_uniref.txt.gz
         """
@@ -276,7 +324,6 @@ rule get_tcdb:
     shell:
         """
         cd Universal_Microbiomics_Alignment_Database
-
         wget --no-check-certificate -N https://www.tcdb.org/cgi-bin/substrates/getSubstrates.py
         wget -O tcdb.faa http://www.tcdb.org/public/tcdb
         """
@@ -288,7 +335,7 @@ rule annotate_TCDB:
     output:
         tcdb_diamond_db = "Universal_Microbiomics_Alignment_Database/tcdb.dmnd",
         UR100vsTCDB = "Universal_Microbiomics_Alignment_Database/UR100vsTCDB.m8"
-    conda: "config/conda_yaml/main.yaml"
+    conda: "snakemake/conda_yaml/main.yaml"
     resources: cpus = 16
     shell:
         """
@@ -309,42 +356,75 @@ rule build_alignment_db:
         tcdb_diamond_db = rules.annotate_TCDB.output.tcdb_diamond_db,
         UR100vsTCDB = rules.annotate_TCDB.output.UR100vsTCDB,
         taxonomy_db = rules.build_tax_db.output.tax_db_tsv,
-        compounds_db = rules.build_compounds_db.output.compounds_db,
-        reactions_db = rules.build_reactions_db.output.rxn_db,
-        function_names = rules.build_compounds_db.output.function_names
+        compounds_db = "MERGED_CPD_DB.txt",
+        reactions_db = "MERGED_RXN_DB.txt"
+        #function_names = rules.build_compounds_db.output.function_names
     output: 
-        uniprot_info = "Universal_Microbiomics_Alignment_Database/UNIPROT_INFO_{version}.txt.gz"
+        #uniprot_info = "Universal_Microbiomics_Alignment_Database/UNIPROT_INFO_{version}.txt.gz"
+        uniprot_out = "Universal_Microbiomics_Alignment_Database/OUT_UNIPROTtest.txt"
     conda: "snakemake/conda_yaml/main.yaml"
-    log: "Universal_Microbiomics_Alignment_Database/create_database_{version}.log"
-    benchmark: "benchmark/build_alignment_db_{version}.txt"
+    log: "Universal_Microbiomics_Alignment_Database/create_database.log"
+    benchmark: "benchmark/build_alignment_db.txt"
     shell:
         """
         ln -f {input.taxonomy_db} Universal_Microbiomics_Alignment_Database/
         ln -f outputs/all*.txt Universal_Microbiomics_Alignment_Database/
         ln -f {input.function_names} Universal_Microbiomics_Alignment_Database/
-
         cd Universal_Microbiomics_Alignment_Database
-
         #perl CurateUniProt.pl 1>create_database_{wildcards.version}.log 2>&1
-
         echo "\n\n***** CurateUniProt.pl is complete *****\n\n" 1>create_database_{wildcards.version}.log 2>&1
-
         cp UNIPROT_INFO_{wildcards.version}int.txt UNIPROT_INFO_{wildcards.version}.txt
         gzip UNIPROT_INFO_{wildcards.version}.txt
+        perl CurateUniRef.pl 1>>create_database.log 2>&1
+        echo "\n\n***** CurateUniRef.pl is complete *****\n\n" 1>create_database.log 2>&1
+        """
 
-        perl CurateUniRef.pl 1>>create_database_{wildcards.version}.log 2>&1
+rule build_alignment_db2:
+    input:
+        script = "latest_Create_Alignment_DB.pl",
+        inidm = "Universal_Microbiomics_Alignment_Database/idmapping.dat.gz",
+        inup = "Universal_Microbiomics_Alignment_Database/uniprot-all.tab.gz",
+        inpar = "Universal_Microbiomics_Alignment_Database/uniparc_all.xml.gz",
+        inkegn = "KEGG_GENES_RXN.txt",
+        inbmon = "BIOCYC_NF/BIOCYC_MONO_RXNS.txt",
+        inrhrx = "RHEA_RXN_DB.txt",
+        inkgrx = "KEGG_RXN_DB.txt",
+        inbcrx = "BIOCYC_RXN_DB.txt",
+        intcdb = "Universal_Microbiomics_Alignment_Database/UR100vsTCDB.m8",
+        intrch = "Universal_Microbiomics_Alignment_Database/getSubstrates.py",
+        infn = "Function_Names.txt",
+        inurfa = "Universal_Microbiomics_Alignment_Database/uniref100.fasta.gz"
+    output: 
+        #uniprot_info = "Universal_Microbiomics_Alignment_Database/UNIPROT_INFO_{version}.txt.gz"
+        #uniprot_out = "OUT_UNIPROTtest.txt"
+        build_done = ".done_build_alignment_db"
+    conda: "snakemake/conda_yaml/main.yaml"
+    log: "create_alignment_database_20220803.log"
+    benchmark: "benchmark/build_alignment_db.txt"
+    resources: partition = "largemem", cpus = 1, mem_mb = 1200000
+    shell:
+        """
+        ln -f {input.inidm} ./
+        ln -f {input.inup} ./
+        ln -f {input.inpar} ./
+        ln -f {input.inbmon} ./
+        ln -f {input.intcdb} ./
+        ln -f {input.intrch} ./
+        ln -f {input.inurfa} ./
 
-        echo "\n\n***** CurateUniRef.pl is complete *****\n\n" 1>create_database_{wildcards.version}.log 2>&1
+        printf "*** Input files linked ***\n\n" 1>{log} 2>&1
+       
+        perl {input.script}  1>>{log} 2>&1
+        printf "\n\n***** {input.script} is complete *****\n\n" 1>>{log} 2>&1
         """
 
 
 rule download_RNAcentral:
     output:
-        id_mapping = "Fix_RNACentral_Taxonomy/id_mapping.tsv.gz",
-        species_ids = "Fix_RNACentral_Taxonomy/rnacentral_species_specific_ids.fasta.gz"
+        id_mapping = "id_mapping.tsv.gz",
+        species_ids = "rnacentral_species_specific_ids.fasta.gz"
     shell:
         """
-        cd Fix_RNACentral_Taxonomy
         wget http://ftp.ebi.ac.uk/pub/databases/RNAcentral/current_release/id_mapping/id_mapping.tsv.gz
         wget http://ftp.ebi.ac.uk/pub/databases/RNAcentral/current_release/sequences/rnacentral_species_specific_ids.fasta.gz
         """
@@ -363,8 +443,6 @@ rule build_ncRNA_db:
         """
         ln -f {input.tax_db} Fix_RNACentral_Taxonomy/
         cd Fix_RNACentral_Taxonomy
-
         perl $(basename {input.script}) #1> $(basename {log}) 2>&1
-
         ln -f rnacentral_clean.fasta.gz rnacentral_clean_{wildcards.version}.fasta.gz
         """
