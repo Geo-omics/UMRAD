@@ -11,7 +11,9 @@ rule all:
     input:
         expand("outputs/TAXONOMY_DB_{version}.txt",version = "JUN_2022"),
         #expand("Universal_Microbiomics_Alignment_Database/UNIPROT_INFO_{version}.txt.gz",version = "JUN_2022"),
-        expand(".done_build_alignment_db:{split}", split = range(1,11)),
+        #expand(".done_build_alignment_db:{split}", split = range(1,11)),
+        "UNIPROT_merged.csv",
+        "UNIREF_INFO_merged.csv",
         "BIOCYC_NF",
         ".get_function_names",
         ".biocyc_monomers_converted",
@@ -384,7 +386,9 @@ rule build_alignment_db_split:
         inurfa = "Universal_Microbiomics_Alignment_Database/uniref100.{split}.fasta.gz"
     output: 
         #uniprot_info = "Universal_Microbiomics_Alignment_Database/UNIPROT_INFO_{version}.txt.gz"
-        #uniprot_out = "OUT_UNIPROTtest.txt"
+        #uniprot_out = "OUT_UNIPROTtest.txt",
+        uniref = "build_align_db_split_{split}/UNIREF_INFO.csv",
+        uniprot = "build_align_db_split_{split}/UNIPROT.csv",
         build_done = touch(".done_build_alignment_db:{split}")
     params:
         workdir = "build_align_db_split_{split}"
@@ -407,8 +411,29 @@ rule build_alignment_db_split:
         printf "\n\n***** {input.script} is complete *****\n\n" 1>>{log} 2>&1
         """
 
+rule merge_alignmentDB:
+    input: 
+        uniprot_1 = "build_align_db_split_1/UNIPROT.csv",
+        uniprots = expand("build_align_db_split_{split}/UNIPROT.csv", split = range(1,11)),
+        uniref_1 = "build_align_db_split_1/UNIREF_INFO.csv",
+        unirefs = expand("build_align_db_split_{split}/UNIREF_INFO.csv", split = range(1,11))
+    output:
+        uniprot = "UNIPROT_merged.csv",
+        uniref = "UNIREF_INFO_merged.csv"
+    shell:
+        """
+        # Merge uniprot splits
+        head -n 1 {input.uniprot_1} > {output.uniprot}; tail -n +2 -q {input.uniprots} >> {output.uniprot}
+
+        # Merge uniref splits
+        head -n 1 {input.uniref_1} > {output.uniref}; tail -n +2 -q {input.unirefs} >> {output.uniref}
+        """
+
 rule build_split_align_dbs:
-    input: expand(".done_build_alignment_db:{split}", split = range(1,11))
+    input: 
+        expand(".done_build_alignment_db:{split}", split = range(1,11)),
+        uniprot = "UNIPROT_merged.csv",
+        uniref = "UNIREF_INFO_merged.csv"
 
 rule build_alignment_db:
     input:
