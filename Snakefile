@@ -4,17 +4,19 @@ from glob import glob
 
 configfile: "snakemake/config.yaml"
 report: "code/report/workflow.rst"
+current_dir = os.getcwd()
 
-db_version = "JUL_2022"
+db_version = "DEC_2022"
 
 rule all:
     input:
-        expand("outputs/TAXONOMY_DB_{version}.txt",version = "JUN_2022"),
+        expand("outputs/TAXONOMY_DB_{version}.txt",version = db_version),
         #expand("Universal_Microbiomics_Alignment_Database/UNIPROT_INFO_{version}.txt.gz",version = "JUN_2022"),
         #expand(".done_build_alignment_db:{split}", split = range(1,11)),
         "UNIPROT_merged.csv",
         "UNIREF_INFO_merged.csv",
-        "BIOCYC_NF",
+        #"BIOCYC_NF",
+        "get_biocyc.done",
         ".get_function_names",
         ".biocyc_monomers_converted",
         "KEGG_GENES_RXN.txt",
@@ -104,12 +106,14 @@ rule get_biocyc:
     input: 
         script = "Get_BioCyc.pl"
     output:
-        #directory("BIOCYC_NF")
+        #directory("BIOCYC_NF"),
         touch("get_biocyc.done")
     params:
-        BIOCYC_FLATS_URL="http://brg-files.ai.sri.com/subscription/dist/flatfiles-52983746/index.html",
+        BIOCYC_FLATS_URL="https://brg-files.ai.sri.com/subscription/dist/flatfiles-52983746/index.html",
         BIOCYC_USER="biocyc-flatfiles",
-        BIOCYC_PASS="data-20541"
+        BIOCYC_PASS="data-20541",
+        biocyc_ff_html = "biocyc_web.txt",
+        biocyc_files = "biocyc_files.txt",
     log: "snakemake/logs/biocyc/get_biocyc.log"
     benchmark: "snakemake/benchmarks/biocyc/get_biocyc.log"
     shell:
@@ -118,14 +122,15 @@ rule get_biocyc:
         #mkdir -p {output}
         #cd {output}
 
-        printf "\n\n######\nDownloading flat file index\n######\n\n" | tee -a $PROJ_ROOT/{log}
-        wget -O biocyc_web.txt {params.BIOCYC_FLATS_URL} | tee -a $PROJ_ROOT/{log}
+        printf "\n\n######\nDownloading flat file index\n######\n\n" | tee $PROJ_ROOT/{log}
+        wget -O {params.biocyc_ff_html} {params.BIOCYC_FLATS_URL} | tee -a $PROJ_ROOT/{log}
 
         printf "\n\n######\nParsing file file index\n######\n\n" | tee -a $PROJ_ROOT/{log}
-        grep -oP "http.*\.tar\.gz" biocyc_web.txt > biocyc_files.txt
+        grep -oP "subscription/dist/.*\.tar\.gz" {params.biocyc_ff_html} > {params.biocyc_files}
+        #grep -oP "http.*\.tar\.gz" {params.biocyc_ff_html} > {params.biocyc_files}
 
         printf "\n\n######\nGetting BioCyc with Get_BioCyc.pl\n######\n\n" | tee -a $PROJ_ROOT/{log}
-        perl $PROJ_ROOT/{input.script} -pwd={params.BIOCYC_PASS} -usr={params.BIOCYC_USER} -in=biocyc_files.txt | tee -a $PROJ_ROOT/{log}
+        perl $PROJ_ROOT/{input.script} -pwd={params.BIOCYC_PASS} -usr={params.BIOCYC_USER} -in={params.biocyc_files} | tee -a $PROJ_ROOT/{log}
         """
 
 rule get_function_names:
@@ -189,7 +194,8 @@ rule convert_kegg_genes:
 
 rule create_biocyc_cpd_rxn_db:
     input: 
-        script = "Create_CPD-RXN-DB_BIOCYC.pl",
+        "get_biocyc.done",
+        script = "Create_CPD-RXN-DB_BIOCYC.pl"
     output: 
         "BIOCYC_RXN_DB.txt",
         "BIOCYC_CPD_DB.txt"
@@ -286,37 +292,49 @@ rule get_alignemnt_db_git:
 
 rule get_uniprot:
     output: "Universal_Microbiomics_Alignment_Database/uniprot-all.tab.gz"
+    log: "snakemake/logs/get_uniprot.txt"
     shell:
         """
-        wget -O {output} 'https://www.uniprot.org/uniprot/?query=*&format=tab&force=true&columns=id,protein%20names,length,lineage-id,lineage(GENUS),lineage(SPECIES),organism,feature(SIGNAL),feature(TRANSMEMBRANE),database(TCDB),database(eggNOG),database(Pfam),database(TIGRFAMs),go-id,database(InterPro),ec,database(BioCyc),feature(DNA%20BINDING),feature(METAL%20BINDING),comment(SUBCELLULAR%20LOCATION),database(KEGG),rhea-id&compress=yes'
+        wget -O {output} 'https://rest.uniprot.org/uniprotkb/stream?query=%2A&format=tsv&force=true&columns=id,protein%20names,length,lineage-id,lineage(GENUS),lineage(SPECIES),organism,feature(SIGNAL),feature(TRANSMEMBRANE),database(TCDB),database(eggNOG),database(Pfam),database(TIGRFAMs),go-id,database(InterPro),ec,database(BioCyc),feature(DNA%20BINDING),feature(METAL%20BINDING),comment(SUBCELLULAR%20LOCATION),database(KEGG),rhea-id&compress=true' | tee {current_dir}/{log}
+        """
+
+rule get_uniprot_new_API:
+    output: "uniprot_download.tsv"
+    log: "snakemake/logs/get_uniprot_new_API.txt"
+    shell:
+        """
+        python download_uniprot.py
         """
 
 rule get_uniref:
     output:
         uniref100 = "Universal_Microbiomics_Alignment_Database/uniref100.fasta.gz"
+    log: "snakemake/logs/get_uniref.txt"
     shell:
         """
         cd Universal_Microbiomics_Alignment_Database
-        wget -N https://ftp.uniprot.org/pub/databases/uniprot/uniref/uniref100/uniref100.fasta.gz
+        wget -N https://ftp.uniprot.org/pub/databases/uniprot/uniref/uniref100/uniref100.fasta.gz | tee {current_dir}/{log}
         """
 
 rule get_uniparc:
     output:
         uniparc_all = "Universal_Microbiomics_Alignment_Database/uniparc_all.xml.gz"
+    log: "snakemake/logs/get_uniparc.txt"
     shell:
         """
         cd Universal_Microbiomics_Alignment_Database
-        wget -N https://ftp.uniprot.org/pub/databases/uniprot/current_release/uniparc/uniparc_all.xml.gz
+        wget -N https://ftp.uniprot.org/pub/databases/uniprot/current_release/uniparc/uniparc_all.xml.gz | tee {current_dir}/{log}
         """
 
 rule get_uniprot_mapping:
     output:
         uniprot_mapping = "Universal_Microbiomics_Alignment_Database/idmapping.dat.gz",
         uniprot_to_uniref = "Universal_Microbiomics_Alignment_Database/uniprot_to_uniref.txt.gz"
+    log: "snakemake/logs/get_uniprot_mapping.txt"
     shell:
         """
         cd Universal_Microbiomics_Alignment_Database
-        wget -N https://ftp.uniprot.org/pub/databases/uniprot/current_release/knowledgebase/idmapping/idmapping.dat.gz
+        wget -N https://ftp.uniprot.org/pub/databases/uniprot/current_release/knowledgebase/idmapping/idmapping.dat.gz | tee {current_dir}/{log}
         zcat idmapping.dat.gz | grep -P "(UniRef100|UniRef90)" | gzip > uniprot_to_uniref.txt.gz
         """
 
@@ -324,11 +342,12 @@ rule get_tcdb:
     output:
         TCDB_get_script = "Universal_Microbiomics_Alignment_Database/getSubstrates.py",
         tcdb = "Universal_Microbiomics_Alignment_Database/tcdb.faa"
+    log: "snakemake/logs/get_tcdb.txt"
     shell:
         """
         cd Universal_Microbiomics_Alignment_Database
-        wget --no-check-certificate -N https://www.tcdb.org/cgi-bin/substrates/getSubstrates.py
-        wget -O tcdb.faa http://www.tcdb.org/public/tcdb
+        wget --no-check-certificate -N https://www.tcdb.org/cgi-bin/substrates/getSubstrates.py | tee {current_dir}/{log}
+        wget -O tcdb.faa http://www.tcdb.org/public/tcdb | tee -a {current_dir}/{log}
         """
 
 rule annotate_TCDB:
@@ -407,8 +426,8 @@ rule build_alignment_db_split:
         printf "*** Input files linked ***\n\n" 1>{log} 2>&1
         cd {params.workdir}
 
-        perl {input.script}  1>>{log} 2>&1
-        printf "\n\n***** {input.script} is complete *****\n\n" 1>>{log} 2>&1
+        perl {input.script}  1>>{current_dir}/{log} 2>&1
+        printf "\n\n***** {input.script} is complete *****\n\n" 1>>{current_dir}/{log} 2>&1
         """
 
 rule merge_alignmentDB:
@@ -504,10 +523,10 @@ rule build_alignment_db2:
         ln -f {input.intrch} ./
         ln -f {input.inurfa} ./
 
-        printf "*** Input files linked ***\n\n" 1>{log} 2>&1
+        printf "*** Input files linked ***\n\n" 1>{current_dir}/{log} 2>&1
        
-        perl {input.script}  1>>{log} 2>&1
-        printf "\n\n***** {input.script} is complete *****\n\n" 1>>{log} 2>&1
+        perl {input.script}  1>>{current_dir}/{log} 2>&1
+        printf "\n\n***** {input.script} is complete *****\n\n" 1>>{current_dir}/{log} 2>&1
         """
 
 

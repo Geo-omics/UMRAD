@@ -33,9 +33,9 @@ while(<INFILE>){
         if(!-s "BIOCYC_NF/$fold/protein-seq-ids.dat"){$down=1;}
         if(!-s "BIOCYC_NF/$fold/metabolic-reactions.xml"){$down=1;}
         if($down==1){
-                print "retrieving $file folder $fold path $path\n";
+                print "retrieving $file folder $fold path https://brg-files.ai.sri.com/$path\n";
                 qx{mkdir BIOCYC_NF/$fold};
-                qx{wget -N -q --user=$usr --password=$pwd $path};
+                qx{wget -N -q --user=$usr --password=$pwd https://brg-files.ai.sri.com/$path};
                 qx{mv $file BIOCYC_NF/$file};
                 qx{tar -zxf BIOCYC_NF/$file --keep-newer-files --transform='s|.*\/||' --directory="BIOCYC_NF/$fold" --wildcards "*reactions.dat"};
                 qx{tar -zxf BIOCYC_NF/$file --keep-newer-files --transform='s|.*\/||' --directory="BIOCYC_NF/$fold" --wildcards "*compounds.dat"};
