@@ -3,7 +3,7 @@
 Takes an uniparc_all.xml.gz and turns it into a tab-separated CSV
 
 usage:
-    unpigz -c uniparc_all.xml.gz | mangle-uniparc-all-xml > uniparc_all.csv
+    unpigz -c uniparc_all.xml.gz | pre-process-uniparc-all > uniparc_all.csv
 
 Will extract Pfam, TIGR, and IPR cross-reference.  Optional filtering by IDs
 from uniref100.fasta.  This will make the output smalled without
