@@ -1,0 +1,401 @@
+#!/usr/bin/env python3
+"""
+Uniprot data download helper
+
+The script will write a .tsv output file and a log file.  The filenames contain
+the Uniprot release identifier.  If an error occurs and the script doesn't
+finish, re-running the script with the previous log and output files present,
+will continue the download process at the point where the previous run stopped.
+If the crash happened while rows were written to the output file, the
+sub-sequent re-run may download those rows again.  You should manually check
+for duplicated rows if you suspect such a case.
+
+With 8 worker threads this comes out at about 2000 rows per second.
+
+The order in which the rows are saved is nondeterministic, may differ between
+runs.
+"""
+import argparse
+from concurrent.futures import FIRST_COMPLETED, ThreadPoolExecutor, wait
+from datetime import datetime
+from pathlib import Path
+from queue import Empty, PriorityQueue
+import re
+from time import perf_counter
+
+import requests
+from requests.adapters import HTTPAdapter, Retry
+
+
+THIS_YEAR = 2023
+MAX_WORKERS = 10
+DOWNLOAD_LOG = 'uniprot_download_{release}.log'
+OUTPUT_FILE = 'uniprot_download_{release}.tsv'
+
+
+argp = argparse.ArgumentParser(description=__doc__)
+argp.add_argument(
+    '--force',
+    action='store_true',
+    help='Set this option to override certain warnings.',
+)
+argp.add_argument(
+    '-v', '--verbose',
+    action='store_true',
+    help='Be more chatty on the console (for debugging)',
+)
+args = argp.parse_args()
+
+
+# Prepare http session stuff:
+# Be aware that we will call get() from multiple threads on a single instance
+# of Session.  This is somewhat sketchy.
+session = requests.Session()
+retries = Retry(total=5, backoff_factor=0.25,
+                status_forcelist=[500, 502, 503, 504])
+session.mount("https://", HTTPAdapter(max_retries=retries))
+re_next_link = re.compile(r'<(.+)>; rel="next"')
+
+# URL template
+# parameters are query and cursor
+URL = 'https://rest.uniprot.org/uniprotkb/search?query={query}&format=tsv&force=true&fields=accession,protein_name,length,lineage,lineage_ids,organism_name,ft_signal,ft_transmem,xref_tcdb,xref_eggnog,xref_pfam,xref_tigrfams,go_id,xref_interpro,ec,xref_biocyc,ft_dna_bind,ft_binding,cc_subcellular_location,xref_kegg,rhea&compress=true{cursor}&size=500'  # noqa:E501
+
+
+def get_headers_info(response_headers):
+    """ extract some info from headers into a dict """
+    return dict(
+        uniprot_release=response_headers['X-UniProt-Release'],
+        release_date=response_headers['X-UniProt-Release-Date'],
+        api_date=response_headers['X-API-Deployment-Date'],
+        total_results=int(response_headers['X-Total-Results']),
+    )
+
+
+############################
+# BEGIN SETUP STAGE
+
+# Request our URL with query=* asking for all records.  But here we're only
+# interested in the total number of records and some other meta data, e.g. the
+# uniprot release, information contained in the response header.
+response = session.head(URL.format(query='*', cursor=''))
+response.raise_for_status()
+meta_info = get_headers_info(response.headers)
+if args.verbose:
+    print(f'DEBUG: {meta_info=}')
+del response
+
+
+logfile = Path() / DOWNLOAD_LOG.format(release=meta_info['uniprot_release'])
+outfile = Path() / OUTPUT_FILE.format(release=meta_info['uniprot_release'])
+if logfile.exists():
+    first_time_run = False
+    print(f'Found previous download log file: {logfile}')
+else:
+    if outfile.exists():
+        argp.error(f'Found existing output file {outfile} but no matching '
+                   f'logfile {logfile}')
+
+    first_time_run = True
+    # first ever download attempt for this release
+    # create new log file
+    with logfile.open('w') as ofile:
+        ofile.write(f'# uniprot download logfile created {datetime.now()}\n')
+        for k, v in meta_info.items():
+            ofile.write(f'{k}: {v}\n')
+    print(f'Logfile created: {logfile}')
+
+# get state data from log file
+cursors = {}  # info for previous downloads
+totals = {}  # per-partition expected total row numbers
+row_nums = {}  # number of downloaded rows per partition
+with logfile.open() as ifile:
+    line = ifile.readline()
+    if not line.startswith('#'):
+        raise RuntimeError('first line of log file must begin with a #')
+
+    saved_meta = {}
+    for _ in range(len(meta_info)):
+        key, value = ifile.readline().split()
+        key = key.removesuffix(':')
+        if key == 'total_results':
+            value = int(value)
+        saved_meta[key] = value
+    del key, value
+    if args.verbose:
+        print(f'DEBUG: {saved_meta=}')
+    found_mismatch = False
+    for k, v in saved_meta.items():
+        if v != meta_info[k]:
+            found_mismatch = True
+            print(f'WARNING: uniprot meta data changed for key {k}: {v}'
+                  f' -> {meta_info[k]}')
+    del k, v
+    if found_mismatch and not args.force:
+        argp.error('Use --force to ignore the above warning(s)')
+
+    # get download state (last cursors and partition totals)
+    for line in ifile:
+        if line.startswith('#'):
+            continue
+        elif line.startswith('cursor: '):
+            _, year, date0, date1, seq_num, _, num_rows, cursor = line.split()
+            seq_num = int(seq_num)
+            num_rows = int(num_rows)
+            part = (int(year), date0, date1)
+            if part not in row_nums:
+                row_nums[part] = 0
+            row_nums[part] += num_rows
+            # last one wins
+            cursors[part] = seq_num, num_rows, cursor
+        elif line.startswith('total_results: '):
+            _, year, date0, date1, total_results = line.split()
+            part = int(year), date0, date1
+            if part in totals:
+                raise RuntimeError(f'totals duplicate: {part}')
+            totals[part] = int(total_results)
+        else:
+            raise RuntimeError(f'unknown log line:\n{line}')
+del ifile
+if args.verbose:
+    print(f'DEBUG {cursors=}')
+    print(f'DEBUG {totals=}')
+    print(f'DEBUG {row_nums=}')
+
+# Get a file handle to append to existing log:
+# There are two places that write to the log, in run_request() totals records
+# are written and in runit(), in the main loop handling completed futures, the
+# cursors are written, it's a single write() call at a time.  This is maybe not
+# totally thread-safe but we've got fingers crossed.
+log = logfile.open('a')
+
+# END SETUP STAGE
+########################
+
+
+def get_next_link(headers):
+    if "Link" in headers:
+        match = re_next_link.match(headers["Link"])
+        if match:
+            return match.group(1)
+
+
+def run_request(part, cursor):
+    """ Run a single http request """
+    year, date0, date1 = part
+    query = f'date_created:[{year}-{date0} TO {year}-{date1}]'
+    if cursor is None:
+        cursor = ''
+    else:
+        cursor = f'&cursor={cursor}'
+    url = URL.format(query=query, cursor=cursor)
+
+    t0 = perf_counter()
+    response = session.get(url)
+    response.raise_for_status()
+    t = perf_counter() - t0
+
+    # Check headers:
+    # This will trip if they change something on the server side while we're
+    # downloading, say a new uniprot release comes online.  In such a case is
+    # would be best to abandon the current effort and start all over again with
+    # the new release.  The course of action for an API change is less clear.
+    info = get_headers_info(response.headers)
+    for k, v in meta_info.items():
+        found_mismatch = False
+        if k == 'total_results':
+            # these are partition-specific
+            if part in totals:
+                v = totals[part]
+            else:
+                # this is the first time we see the totals for this partition
+                v = info[k]  # will make check below pass
+                totals[part] = v
+                log.write(f'total_results: {year} {date0} {date1} {v}\n')
+
+        if info[k] != v:
+            found_mismatch = True
+            print(f'ERROR: Bad header: key {k} is {response.headers[k]} but '
+                  f'expected {v}')
+    if found_mismatch:
+        raise RuntimeError('header info changed at {part=} {cursor=}')
+
+    return response, t
+
+
+def get_dates():
+    """ Generator for the dataset partitions """
+    # first year with data is 1986
+    years = range(1986, THIS_YEAR + 1)
+    dates = [
+        ('01-01', '01-31'),
+        ('02-01', '02-29'),  # 29th is okay even if not a leap year
+        ('03-01', '03-31'),
+        ('04-01', '04-30'),
+        ('05-01', '05-31'),
+        ('06-01', '06-30'),
+        ('07-01', '07-31'),
+        ('08-01', '08-31'),
+        ('09-01', '09-30'),
+        ('10-01', '10-31'),
+        ('11-01', '11-30'),
+        ('12-01', '12-31'),
+    ]
+    for i in reversed(years):
+        for date0, date1 in dates:
+            yield i, date0, date1
+
+
+def runit():
+    """
+    The main function, does the downloading
+
+    This is called once, below, at the end of the script inside a try block in
+    order ensure that writes to the log file get flushed to disk in case or
+    errors.
+    """
+    if outfile.exists():
+        mode = 'ab'
+        need_col_header = False  # assume file has the column headers
+        print(f'Will append to existing output file {outfile}')
+    else:
+        mode = 'wb'
+        need_col_header = True
+        print(f'Will create new output file {outfile}')
+
+    with ThreadPoolExecutor(max_workers=MAX_WORKERS) as executor, outfile.open(mode) as ofile:  # noqa:E501
+        if not first_time_run:
+            log.write(f'# continuing download at {datetime.now()}\n')
+
+        # preparation: submit one request for each partition
+        futures = {}
+        task_queue = PriorityQueue()
+
+        done_count = partial_count = new_count = 0
+        for part in get_dates():
+            seq_num, _, cursor = cursors.get(part, (0, None, None))
+            if cursor == 'DONE':
+                # dataset partition is fully downloaded, skip
+                done_count += 1
+                continue
+            elif cursor is None:
+                # dataset partition was not seen at all yet
+                new_count += 1
+            else:
+                # got a real cursor, so dataset partition is partially
+                # downloaded
+                partial_count += 1
+            # task priority: highest seq_num go first (so negate seq num)
+            task_queue.put_nowait((- seq_num, part, cursor))
+        del part, cursor, seq_num
+
+        if done_count:
+            print(f'{done_count} partitions are fully downloaded')
+        if partial_count:
+            print(f'{partial_count} partitions are partially downloaded')
+        if new_count:
+            print(f'There are {new_count} partitions to be downloaded from '
+                  f'the beginning')
+        del done_count, partial_count, new_count
+
+        if task_queue.empty():
+            print('Nothing to be done')
+            return
+
+        # submit tasks until pool is full
+        for _ in range(MAX_WORKERS):
+            try:
+                neg_seq_num, part, cursor = task_queue.get(block=False)
+            except Empty:
+                break
+            seq_num = - neg_seq_num
+            fut = executor.submit(run_request, part, cursor)
+            futures[fut] = part, seq_num, cursor
+
+        # main loop: process incoming results and issue follow-up request
+        while futures:
+            done, not_done = wait(futures, return_when=FIRST_COMPLETED)
+            for fut in done:
+                response, response_time = fut.result()
+                next_url = get_next_link(response.headers)
+                part, seq_num, _ = futures.pop(fut)
+
+                if next_url:
+                    # get cursor and issue request
+                    for i in next_url.split('&'):
+                        if i.startswith('cursor='):
+                            _, _, cursor = i.partition('=')
+                            break
+                    else:
+                        raise RuntimeError(f'no cursor in nexturl: {next_url}')
+                    # queue task with higher seq num (and higher priority)
+                    task_queue.put_nowait((- (seq_num + 1), part, cursor))
+                else:
+                    cursor = 'DONE'
+
+                lines = response.iter_lines()
+                head = next(lines)
+                if need_col_header:
+                    ofile.write(head)
+                    ofile.write(b'\n')
+                    need_col_header = False
+
+                num_rows = 0
+                for line in lines:
+                    ofile.write(line)
+                    ofile.write(b'\n')
+                    num_rows += 1
+                if part in row_nums:
+                    row_nums[part] += num_rows
+                else:
+                    row_nums[part] = num_rows
+
+                if next_url:
+                    status = '*'
+                else:
+                    status = 'DONE'
+
+                # write cursor info to log
+                year, date0, date1 = part
+                log.write(f'cursor: {year} {date0} {date1} {seq_num} '
+                          f'{response_time:.1f}s {num_rows} {cursor}\n')
+
+                print(f'{part} {response_time:.1f}s rows:{num_rows} '
+                      f'seq:{seq_num} {status} '
+                      f'pending:{len(not_done) + task_queue.qsize()}')
+
+                if cursor == 'DONE':
+                    # check totals for dataset partition
+                    if totals[part] != row_nums[part]:
+                        print(f'WARNING: Finished {part} but row number math '
+                              f'does not add up: {totals[part]=} '
+                              f'{row_nums[part]=}')
+
+            # refill pool from task queue
+            for _ in range(len(done)):
+                try:
+                    neg_seq_num, part, cursor = task_queue.get(block=False)
+                except Empty:
+                    # no further tasks
+                    break
+                seq_num = - neg_seq_num
+                fut = executor.submit(run_request, part, cursor)
+                futures[fut] = part, seq_num, cursor
+            # end of main loop
+
+        if not task_queue.empty():
+            # some tasks/futures accounting bug
+            raise RuntimeError('no pending futures but tasks in queue')
+
+
+try:
+    runit()
+except Exception:
+    log.close()
+    raise
+
+
+# check global totals
+total_rows = sum(row_nums.values())
+if meta_info['total_results'] != total_rows:
+    print(f'WARNING: total row count does not add up: '
+          f'{meta_info["total_results"]=} {total_rows=}')
