@@ -1,0 +1,77 @@
+#!/usr/bin/env python3
+"""
+De-duplicate a uniprot table
+"""
+import argparse
+from pathlib import Path
+import sys
+
+
+argp = argparse.ArgumentParser(description=__doc__)
+argp.add_argument(
+    'inputfile',
+    type=argparse.FileType(),
+    help='uniprot download file obtained via download-uniprot'
+)
+argp.add_argument(
+    '-o', '--out-file',
+    help='output file name, optional',
+)
+argp.add_argument(
+    '--dupes-out',
+    help='optional file to which to write duplicate uniprot ids',
+)
+args = argp.parse_args()
+
+
+uids = {}
+dupes = {}
+
+# consume column headers (we blindly assume there is one)
+args.inputfile.readline()
+
+print('Looking for duplicates... ', end='', flush=True, file=sys.stderr)
+for line in args.inputfile:
+    uid, rest = line.split('\t', maxsplit=1)
+    val = hash(rest)
+    if uid in uids:
+        if uid not in dupes:
+            dupes[uid] = [uids[uid]]
+        dupes[uid].append(val)
+    else:
+        uids[uid] = val
+print('[OK]', file=sys.stderr)
+print(f'Found {len(dupes)} distinct uniprot IDs on multiple rows.',
+      file=sys.stderr)
+
+
+if args.dupes_out:
+    with open(args.dupes_out, 'w') as ofile:
+        print(f'Writing info to {ofile.name} ... ', end='', flush=True,
+              file=sys.stderr)
+        for uid, hashes in dupes.items():
+            keys = []
+            uniq_hashes = set(hashes)
+            ofile.write(f'{uid}\t{len(hashes)}\t{len(uniq_hashes)}\n')
+    print('[OK]', file=sys.stderr)
+
+if args.out_file:
+    output = Path(args.out_file)
+else:
+    output = Path(args.inputfile.name).name
+    output = Path(Path(output).stem + '.dedup' + Path(output).suffix)
+with output.open('w') as ofile:
+    print(f'Writing deduplicated rows to {output} ...',
+          end='', flush=True, file=sys.stderr)
+    args.inputfile.seek(0)
+    # copy header
+    ofile.write(args.inputfile.readline())
+    dupes_written = set()
+    for line in args.inputfile:
+        uid, rest = line.split('\t', maxsplit=1)
+        if uid in dupes:
+            if uid in dupes_written:
+                continue
+            dupes_written.add(uid)
+        ofile.write(f'{uid}\t{rest}')
+print('[OK]', file=sys.stderr)

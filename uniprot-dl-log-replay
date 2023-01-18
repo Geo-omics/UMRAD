@@ -1,0 +1,49 @@
+#!/usr/bin/env python3
+import argparse
+from itertools import islice
+
+
+argp = argparse.ArgumentParser()
+argp.add_argument(
+    'logfile',
+    type=argparse.FileType(),
+    help='download-uniprot log file',
+)
+argp.add_argument(
+    'tsvfile',
+    type=argparse.FileType(),
+    help='downloaded uniprot table',
+)
+argp.add_argument(
+    '-l', '--limit',
+    type=int,
+    default=0,
+    help='limit how many lines to process'
+)
+args = argp.parse_args()
+if args.limit < 0:
+    argp.error('limit must be >0')
+
+batches = []
+for line in args.logfile:
+    if line.startswith('#'):
+        continue
+    line_type, _, line_data = line.rstrip('\n').partition(': ')
+
+    if line_type == 'cursor':
+        row = line_data.split()
+        year, date1, date2, seq, _, count, _ = row
+        seq = int(seq)
+        count = int(count)
+        key = f'{year}-{date1}-{date2}'
+        batches.append((key, seq, count))
+
+with open('replay', 'w') as ofile:
+    ofile.write(f'key\tseq\t{args.tsvfile.readline()}')
+    n = 0
+    for key, seq, count in batches:
+        for line in islice(args.tsvfile, count):
+            ofile.write(f'{key}\t{seq}\t{line}')
+        n += count
+        if args.limit and n >= args.limit:
+            break

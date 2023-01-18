@@ -1,0 +1,55 @@
+#!/usr/bin/env python3
+import argparse
+
+
+argp = argparse.ArgumentParser()
+argp.add_argument(
+    '-f', '--log-file',
+    type=argparse.FileType(),
+    help='download-uniprot log file',
+)
+args = argp.parse_args()
+
+
+global_total = 0
+num_reqs = 0
+expected = {}
+actual = {}
+for n, line in enumerate(args.log_file, start=1):
+    if line.startswith('#'):
+        continue
+    line_type, _, data = line.rstrip('\n').partition(': ')
+
+    if line_type == 'total_results':
+        row = data.split()
+        if len(row) == 1:
+            global_total = int(data)
+            continue
+        year, date1, date2, count = row
+        expected[(year, date1, date2)] = int(count)
+
+    elif line_type == 'cursor':
+        row = data.split()
+        year, date1, date2, _, _, count, _ = row
+        key = (year, date1, date2)
+        if key not in actual:
+            actual[key] = 0
+        actual[key] += int(count)
+        num_reqs += 1
+
+for key in expected:
+    a = expected[key]
+    b = actual[key]
+    if a != b:
+        print('mismatch: {key}: expected {a} but {b} rows were downloaded')
+
+for k, v in actual.items():
+    if k not in expected:
+        print('downloaded but not expected:', k, v)
+
+
+print('global total:', global_total)
+print('sum totals expected:', sum(expected.values()))
+print('sum totals downloaded:', sum(actual.values()))
+print('number of partitions:', len(expected), len(actual))
+print('number of requests:', num_reqs)
