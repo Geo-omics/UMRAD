@@ -4,10 +4,10 @@ use Sort::Naturally 'nsort';
 
 
 ##############################################################
-#OPEN FILES - CHECK
+#INPUT FILES - CHECK
 ##############################################################
 my $inidm  = 'idmapping.dat.gz';		-e $inidm  || die "1 no $inidm  - please place into this folder and restart\n";
-my $inup  	= 'uniprot-all.tab.gz';		-e $inup   || die "2 no $inup   - please place into this folder and restart\n";
+my $inup  	= 'uniprot_download.tsv.zst';	-e $inup   || die "2 no $inup   - please place into this folder and restart\n";
 my $inpar	= 'uniparc_all.csv.gz';		-e $inpar  || die "3 no $inpar   - please place into this folder and restart\n";
 my $urfa	= 'uniref100.fasta.gz';         -e $urfa   || die "4 no $urfa   - please place into this folder and restart\n";
 my $inkegn	= 'KEGG_GENES_RXN.txt';		-e $inkegn || die "5 no $inkegn - please place into this folder and restart\n";
@@ -19,6 +19,11 @@ my $intcdb	= 'UR100vsTCDB.m8';		-e $intcdb || die "10 no $intcdb - please place 
 my $intrch	= 'getSubstrates.py';		-e $intrch || die "11 no $intrch - please place into this folder and restart\n";
 my $infn	= 'Function_Names.txt';		-e $infn   || die "12 no $infn - please place into this folder and restart\n";
 
+##############################################################
+#OUTPUT FILES
+##############################################################
+my $uniprot_out     = 'UNIPROT.tsv';
+my $uniref_info_out = 'UNIREF_INFO.tsv';
 
 
 ##############################################################
@@ -135,7 +140,7 @@ print "DONE $on UPIDs; but no sequence: $seq_missing, entries w/o UR100: $no_ur1
 # - previous used as left/right cpds - compile from RXN_DB chebi
 $time=localtime; $on=0;
 print "INPUT TRANSPORTER SUBSTRATES $time\n";
-open(INTRCH, $intrch) || die "failed to open $intrch";
+open(INTRCH, $intrch) || die "failed to open $intrch: $!";
 my %TCDB_CPDS;
 my (@CHEBS, $chebi,);
 while(<INTRCH>){
@@ -156,7 +161,7 @@ print "DONE $on lines\n\n";
 #INPUT TCDB ALIGNMENTS
 $time=localtime; $on=0;
 print "INPUT UNIREF100 vs TCDB MATCHES $time\n";
-open(INTCDB, $intcdb) || die "failed to open $intcdb";
+open(INTCDB, $intcdb) || die "failed to open $intcdb: $!";
 my (@stuff, $tcdb, $pid, $cov, $sco, %UR100_TCDB_SCO, %HASCPD);
 my %UR100_TCDB;
 while(<INTCDB>){
@@ -208,7 +213,7 @@ undef(%TCDB_CPDS);
 #LOAD KEGG GENES
 $time=localtime; $on=0;
 print "INPUT KEGG GENES $time\n";
-open(INKEGN, $inkegn) || die "failed to open $inkegn";
+open(INKEGN, $inkegn) || die "failed to open $inkegn: $!";
 while(<INKEGN>){
         if($_!~/\w/){next;}
         $_=uc($_);
@@ -226,7 +231,7 @@ print "DONE $on lines\n\n";
 #LOAD BIOCYC MONOMERS
 $time=localtime; $on=0;
 print "INPUT MONOMERS $time\n";
-open(INBMON, $inbmon) || die "failed to open $inbmon";
+open(INBMON, $inbmon) || die "failed to open $inbmon: $!";
 my %MONO_BRXN;
 while(<INBMON>){
         if($_!~/\w/){next;}
@@ -244,7 +249,7 @@ print "DONE $on lines\n\n";
 #GET FUNCTION NAMES
 $time=localtime; $on=0;
 print "INPUT $infn $time\n";
-open(INFN, $infn) || die "failed to open $infn";
+open(INFN, $infn) || die "failed to open $infn: $!";
 my %FUNC_NAMES;
 while(<INFN>){
 	if($_ !~ /\w/){next;}
@@ -266,7 +271,7 @@ print "DONE $on lines\n\n";
 #INPUT UNIPARC FUNCTIONS
 $on=0; my $picked=0; my $skipped=0; $time=localtime; $print_progress=0;
 print "INPUT UNIPARC $time\n";
-open(INPARTAB,  "unpigz -c $inpar |") || die "failed to open $inpar";
+open(INPARTAB,  "unpigz -c $inpar |") || die "failed to open $inpar: $!";
 my (@PFAM, @TIGR, @IPR);
 my ($pfam, $tigr, $ipr);
 while(<INPARTAB>){
@@ -314,7 +319,7 @@ print "DONE $on records total; picked: $picked; skipped (no sequence): $skipped;
 #RHEA
 $on=0; $time=localtime;
 print "INPUT RHEA RXN $time\n";
-open(INRHRX, $inrhrx) || die "failed to open $inrhrx";
+open(INRHRX, $inrhrx) || die "failed to open $inrhrx: $!";
 my (%EC_RRXN, %UPID_RRXN);
 my ($rxn, $ec);
 while(<INRHRX>){
@@ -335,7 +340,7 @@ print "DONE $on lines\n\n";
 #KEGG
 $on=0; $time=localtime;
 print "INPUT KEGG RXN $time\n";
-open(INKGRX, $inkgrx) || die "failed to open $inkgrx";
+open(INKGRX, $inkgrx) || die "failed to open $inkgrx: $!";
 my (%EC_KRXN, %UPID_KRXN);
 while(<INKGRX>){
         if($_!~/\w/){next;}
@@ -354,7 +359,7 @@ print "DONE $on lines\n\n";
 #BIOCYC
 $on=0; $time=localtime;
 print "INPUT BIOCYC RXN $time\n";
-open(INBCRX, $inbcrx) || die "failed to open $inbcrx";
+open(INBCRX, $inbcrx) || die "failed to open $inbcrx: $!";
 my (%EC_BRXN, %UPID_BRXN);
 while(<INBCRX>){
         if($_!~/\w/){next;}
@@ -379,17 +384,18 @@ print "DONE $on lines\n\n";
 ##### 		INPUT / OUTPUT UNIPROT DOWNLOAD		######
 ##############################################################
 $on=0; $time=localtime; $skipped = 0;
-open(OUTPINT, ">", "UNIPROT.csv") or die "failed opening output file for writing: $!";
+open(OUTPINT, ">", "$uniprot_out") or die "failed opening output file for writing: $!";
 print "INPUT UNIPROT $time\n";
 print OUTPINT "UP-ID\tUR100\tUR90\tName\tLength\t";
-print OUTPINT "SigPep\tTMS\tDNA\tTaxonId\tMetal\tLoc\t";
+print OUTPINT "SigPep\tTMS\tDNA\tTaxonId\tBinding\tLoc\t";
 print OUTPINT "TCDB\tCOG\tPfam\tTigr\tGene_Ont\tInterPro\tECs\t";
 print OUTPINT "kegg\trhea\tbiocyc\n";
-open(INUP, "unpigz -c $inup |") || die "failed to open $inup";
+open(INUP, "-|", "zstdcat $inup") || die "failed to open and/or decompress $inup: $!";
 my ($plen, @NAMES, @GN, @KNS, $n, $sig, $tms, @TMS, $tcp, @TCDBS, %seen, $cog, @COG);
 my ($pfa, $tig, $gos, @GOS, $ecs, @ECS, @MON, $dna, $cln, $met, @METS, @GME, $loc);
 my (@KEGS, @RHEA, %BRXN, %RRXN, %KRXN, @BIO, @RHE, @KEG, $kegg, $rhea, $bioc, @FIN);
-my (@IDS, @GIDS, $out);
+my (%ligand_data, $ligands);
+my (@IDS, @GIDS, $out, @tidstuff);
 while(<INUP>){
 	if($_!~/\w/){next;}
 	$_=uc($_);
@@ -400,8 +406,7 @@ while(<INUP>){
 	if($stuff[0] =~ /^(ENTRY|PID)/i){	$skipped++; next;}	#skip column headers
 	if($stuff[0] !~ /\w+/){			$skipped++; next;}	#no PID
 	if($stuff[2] < 10 ){			$skipped++; next;}	#prot <10 a.a.
-	if($stuff[3] !~ /^\d+$/){		$skipped++; next;}	#no taxid
-
+	if($stuff[4] !~ /^\d+/){		$skipped++; next;}	#no taxid
 	#SET BASIC VARIABLES
 	$upid   = $stuff[0];
 	if(!exists($UPID_UR100{$upid})){	$skipped++; next;}
@@ -410,7 +415,12 @@ while(<INUP>){
 	$name	=$stuff[1];
 	$plen	=$stuff[2];
 	if($plen!~/\d/){$plen=$UR100_LEN{$ur100};}
-	$tid	=$stuff[3];
+        # tax ID parsing: these come as full lineages, with comma-separated
+        # "taxid (rank)" starting with the lowest rank, so here we are just
+        # taking the first number, that is the lowest rank's taxid
+	@tidstuff	= split(" ", $stuff[4], 2);
+        $tid = $tidstuff[0];
+        if ($tid !~ /^\d+$/) {die "failed parsing taxid at $upid: $stuff[4]\n";}
 
 	# FIX NAMES
 	@NAMES=split('\(',$stuff[1]);
@@ -429,11 +439,11 @@ while(<INUP>){
         }
 
 	#COMPILE/CLEAN UNIPROT ANNOTATIONS
-	$sig=''; 		if($stuff[7]=~/(\d+)\.\.(\d+)/){						$sig = "SIGNAL:".$1."..".$2;}
+	$sig=''; 		if($stuff[6]=~/(\d+)\.\.(\d+)/){						$sig = "SIGNAL:".$1."..".$2;}
 
-	$tms=''; @TMS=(); 	if($stuff[8]=~/TRANSMEM|TMS/){@TMS = ($stuff[8]=~/(\d+\.\.\d+)/g); 		$tms  = join(";",@TMS); $tms="TMS:".$tms;}
+	$tms=''; @TMS=(); 	if($stuff[7]=~/TRANSMEM|TMS/){@TMS = ($stuff[7]=~/(\d+\.\.\d+)/g); 		$tms  = join(";",@TMS); $tms="TMS:".$tms;}
 
-	$tcp=''; @TCDBS=();	@TCDBS = ($stuff[9]=~/([A-Z\d\.]+)/g); #UNIPROT ANNOTATED TCDBS
+	$tcp=''; @TCDBS=();	@TCDBS = ($stuff[8]=~/([A-Z\d\.]+)/g); #UNIPROT ANNOTATED TCDBS
 		if(exists($UR100_TCDB{$ur100}) and $UR100_TCDB{$ur100}=~/[A-Z\d\.]+/) {
                     #ALIGNMENT ANNOTATED TCDBS
                     push(@TCDBS,$UR100_TCDB{$ur100});
@@ -441,30 +451,42 @@ while(<INUP>){
 		for my $i (0..$#TCDBS){ if( $TCDBS[$i] !~ /^TCDB/ && $TCDBS[$i]=~/\w/){ $TCDBS[$i]="TCDB:".$TCDBS[$i]; }} 
 		%seen=(); @TCDBS = grep{ !$seen{$_}++ } @TCDBS;							$tcp = join(";", @TCDBS);
 
-	$cog=''; @COG=();	if($stuff[10]=~/[CK]OG\d+/){@COG  = ($stuff[10]=~/\b([CK]OG\d{4})\b/g);		$cog = join(";",@COG);}
+	$cog=''; @COG=();	if($stuff[9]=~/[CK]OG\d+/){@COG  = ($stuff[9]=~/\b([CK]OG\d{4})\b/g);		$cog = join(";",@COG);}
 
-	$pfa=''; @PFAM=();	if($stuff[11]=~/(PF\d+)/){  @PFAM = ($stuff[11]=~/(PF\d+)/g); 			$pfa = join(";",@PFAM);}
+	$pfa=''; @PFAM=();	if($stuff[10]=~/(PF\d+)/){  @PFAM = ($stuff[10]=~/(PF\d+)/g); 			$pfa = join(";",@PFAM);}
 
-	$tig=''; @TIGR=();	if($stuff[12]=~/(TIGR\d+)/){@TIGR = ($stuff[12]=~/(TIGR\d+)/g); 		$tig = join(";",@TIGR);}
+	$tig=''; @TIGR=();	if($stuff[11]=~/(TIGR\d+)/){@TIGR = ($stuff[11]=~/(TIGR\d+)/g); 		$tig = join(";",@TIGR);}
 
-	$gos=''; @GOS=();	if($stuff[13]=~/GO.\d+/){   @GOS  = ($stuff[13]=~/(GO.\d+)/g); 			$gos = join(";",@GOS);}
+	$gos=''; @GOS=();	if($stuff[12]=~/GO.\d+/){   @GOS  = ($stuff[12]=~/(GO.\d+)/g); 			$gos = join(";",@GOS);}
 
-	$ipr=''; @IPR=();	if($stuff[14]=~/(IPR\d+)/){ @IPR  = ($stuff[14]=~/(IPR\d+)/g);			$ipr = join(";",@IPR);}
+	$ipr=''; @IPR=();	if($stuff[13]=~/(IPR\d+)/){ @IPR  = ($stuff[13]=~/(IPR\d+)/g);			$ipr = join(";",@IPR);}
 
-	$ecs=''; @ECS=();	if($stuff[15]=~/[\d\.]+/){  @ECS  = ($stuff[15]=~/(\d+\.\d+\.\d+\.\d+)/g);	$ecs = join(";",@ECS);}
+	$ecs=''; @ECS=();	if($stuff[14]=~/[\d\.]+/){  @ECS  = ($stuff[14]=~/(\d+\.\d+\.\d+\.\d+)/g);	$ecs = join(";",@ECS);}
 
-		 @MON=();  	if($stuff[16]=~/MONOMER/){  @MON  = ($stuff[16] =~ /([\-\w]*MONOMER[\-\w]*)/g); } 
+		 @MON=();  	if($stuff[15]=~/MONOMER/){  @MON  = ($stuff[15] =~ /([\-\w]*MONOMER[\-\w]*)/g); }
 
-	$dna=''; 		if($stuff[17]=~/(\d+\.\.\d+).*?NOTE\=\"([^\"]+)/){ $cln=$2; 	$dna = "DNA:".$1."|".$cln;}
+	$dna=''; 		if($stuff[16]=~/(\d+\.\.\d+).*?NOTE\=\"([^\"]+)/){ $cln=$2; 	$dna = "DNA:".$1."|".$cln;}
 
-	$met=''; @METS=();	if($stuff[18]=~/NOTE/){	    @METS = ($stuff[18]=~/NOTE\W+([\w\s]+\w).*?[\"\;]+/g );
-					@GME=(); for my $i (0..$#METS){ $METS[$i] = $METS[$i];
-						if($METS[$i]=~/\w/){push(@GME, $METS[$i]);}}			$met = join(";", @GME);}
+        # extract ligant_id from binding site column
+        %ligand_data = ();
+        foreach my $item (split("; ", $stuff[17])) {
+            # This simply collects all distinct ChEBI prefixed ligand IDs.
+            # a warning will be issued if we encounter a non-ChEBI ID.
+            # A typical ligand ID is "CHEBI:CHEBI:12345" and we want to keep CHEBI:12345
+            if ($item =~ m|/LIGAND_ID="(.*?):(.*)"|) {
+                if ($1 eq 'CHEBI') {
+                    $ligand_data{$2} = 0
+                } else {
+                    print "WARNING: non CHEBI ligand ID $1: $upid\n";
+                }
+            }
+        }
+        $ligands = join ";", keys(%ligand_data);
 						
-        $loc = mangle_locations($stuff[19]);
-		 @KEGS=(); 	if($stuff[20]=~/\w+/){	    @KEGS = ($stuff[20]=~/([^\;]+)/g);}
+        $loc = mangle_locations($stuff[18]);
+		 @KEGS=(); 	if($stuff[19]=~/\w+/){	    @KEGS = ($stuff[19]=~/([^\;]+)/g);}
 
-		 @RHEA=(); 	if($stuff[21]=~/\w+/){	    @RHEA = ($stuff[21]=~/(\d+)/g);}
+		 @RHEA=(); 	if($stuff[20]=~/\w+/){	    @RHEA = ($stuff[20]=~/(\d+)/g);}
 
 
 	## GET REACTIONS - setting sort JIC want to switch to top hit - may be neccessary if excessive/general function annotations
@@ -515,7 +537,7 @@ while(<INUP>){
 	$FIN[7]=$tid;		if($tid=~/^\d+$/){$UR100_INFO{$ur100}{7}{$tid}++;}  # TODO: overwrite existing??
 	
 	#basic Function IDs
-	$FIN[8]=$met;
+	$FIN[8]=$ligands;
 	$FIN[9]=$loc;
 	$FIN[10]=$tcp;
 	$FIN[11]=$cog;
@@ -548,6 +570,7 @@ while(<INUP>){
 }
 close INUP;
 close(OUTPINT) or die "failed closing output filehandle: $!";;
+print "uniprot output table written to: $uniprot_out\n";
 $num_info_recs = keys %UR100_INFO;
 $time = localtime;
 print "DONE on $on uniprots $time skipped: $skipped; #INFO=$num_info_recs\n\n";
@@ -570,9 +593,9 @@ print "DONE freed mem $time\n";
 $on=0; $time=localtime; my $nolenskip = 0;
 print "OUTPUT UNIREF100 $time\n";
 #go thru all UniRef100s
-open(OUTREF, ">", "UNIREF_INFO.csv") or die "failed to write output file: $1\n";
+open(OUTREF, ">", "$uniref_info_out") or die "failed to write output file: $!";
 print OUTREF "UR100\tUR90\tName\tLength\t";
-print OUTREF "SigPep\tTMS\tDNA\tTaxonId\tMetal\tLoc\t";
+print OUTREF "SigPep\tTMS\tDNA\tTaxonId\tBinding\tLoc\t";
 print OUTREF "TCDB\tCOG\tPfam\tTigr\tGene_Ont\tInterPro\tECs\t";
 print OUTREF "kegg\trhea\tbiocyc\n";
 my (@OUT, $nc, %extra_names, $ids);
@@ -618,6 +641,7 @@ foreach my $ur100 (keys %UR100_LEN){
 	if(progress($on)) {$time=localtime; print "on $on time $time ur100 $ur100 name $OUT[2]\n";} $on++;
 }
 close OUTREF or die "failed closing output filehandle: $!";
+print "uniref info table written to: $uniref_info_out\n";
 $time = localtime;
 print "DONE $on lines -- $time -- skipped $nolenskip\n";
 
