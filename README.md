@@ -25,4 +25,7 @@ There are several primary and secondary microbiome analysis pipelines on my main
 * Strain-level Metagenome Binning [here](https://github.com/TealFurnholm/Community-Based-Metagenome-Binning)
 * Secondary Functional Analysis and Visualization [here](https://github.com/TealFurnholm/Meta-omics_Functional_Analysis)    
     
-## Start: [here](https://github.com/TealFurnholm/UMRAD/wiki)
+### Start: [here](https://github.com/TealFurnholm/UMRAD/wiki)
+
+## Build pipeline:
+![UMRAD snakemake build pipeline](rulegraph.png)
