@@ -4,7 +4,7 @@ $time = localtime;
 qx{wget -N https://ftp.ncbi.nlm.nih.gov/pub/COG/KOG/kog};
 qx{wget -N http://current.geneontology.org/ontology/go.obo};
 qx{wget -N https://ftp.expasy.org/databases/enzyme/enzyme.dat};
-qx{wget -N https://ftp.ebi.ac.uk/pub/databases/interpro/entry.list};
+qx{wget -N https://ftp.ebi.ac.uk/pub/databases/interpro/current_release/entry.list};
 qx{wget -N http://ftp.ebi.ac.uk/pub/databases/Pfam/current_release/Pfam-A.clans.tsv.gz; gunzip -f Pfam-A.clans.tsv.gz};
 qx{wget -N https://ftp.ncbi.nlm.nih.gov/pub/COG/COG2020/data/cog-20.def.tab};
 qx{wget -N https://ftp.ncbi.nlm.nih.gov/hmm/current/hmm_PGAP.tsv};
