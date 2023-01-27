@@ -725,7 +725,7 @@ undef(%RXN_ALTS);  undef(%RXN_DIR);   undef(%RXN_EC); undef(%UPID_RXN); undef(%R
 #####################################################################
 ########################   SUBROUTINES   ############################
 #####################################################################
-die;
+#die;
 #CHECK OUTPUTS CODE -- KEEP! - turn into subroutine?
 
 #$cnt=0; $fkc  =keys %CMPD_FORM;	#foreach my $cpd (keys %CMPD_FORM){  						print "CMPD_FORM cpd $cpd val $CMPD_FORM{$cpd}\n";  $cnt++; if($cnt>100){last;}}

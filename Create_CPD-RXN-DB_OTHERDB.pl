@@ -30,7 +30,7 @@ $time=localtime;
 print "DOWNLOAD INPUTS time $time\n";
 qx{wget -N https://www.tcdb.org/cgi-bin/substrates/getSubstrates.py};
 qx{wget -N https://pathbank.org/downloads/pathbank_all_metabolites.csv.zip};    qx{unzip -u pathbank_all_metabolites.csv.zip};
-qx{wget -N https://hmdb.ca/system/downloads/current/hmdb_metabolites.zip};      qx{unzip -u hmdb_metabolites.zip};
+qx{wget -N https://hmdb.ca/system/downloads/current/hmdb_metabolites.zip};      qx{unzip -u -o hmdb_metabolites.zip};
 qx{wget -N https://ftp.ebi.ac.uk/pub/databases/chebi/ontology/chebi.owl};
 qx{wget -O CID_cheb_summary.csv 'https://pubchem.ncbi.nlm.nih.gov/sdq/sdqagent.cgi?infmt=json&outfmt=csv&query={%22download%22:%22*%22,%22collection%22:%22substance%22,%22where%22:{%22ands%22:[{%22*%22:%22chebi%22}]},%22order%22:[%22relevancescore,desc%22],%22start%22:1,%22limit%22:10000000,%22downloadfilename%22:%22PubChem_substance_text_chebi%22}'};
 qx{wget -O CID_bioc_summary.csv 'https://pubchem.ncbi.nlm.nih.gov/sdq/sdqagent.cgi?infmt=json&outfmt=csv&query={%22download%22:%22*%22,%22collection%22:%22substance%22,%22where%22:{%22ands%22:[{%22*%22:%22biocyc%22}]},%22order%22:[%22relevancescore,desc%22],%22start%22:1,%22limit%22:10000000,%22downloadfilename%22:%22PubChem_substance_text_biocyc%22}'};
@@ -50,10 +50,10 @@ $ec_up = `wget -q -O - https://ftp.expasy.org/databases/enzyme/enzyme.dat`;
 #specific
 open(INPBANK, 	"pathbank_all_metabolites.csv")	||die "unable to open pathbank_all_metabolites.csv: $!\n";
 open(INHMDB, 	"hmdb_metabolites.xml")		||die "unable to open hmdb_metabolites.xml: $!\n";
-open(INPUBBIOC, "CID-biocyc_summary.csv")	||die "Unable to open CID_biocyc_summary.csv\n";
-open(INPUBCHEB, "CID-chebi_summary.csv") 	||die "Unable to open CID_chebi_summary.csv\n";
-open(INPUBKEGG, "CID-kegg_summary.csv")	 	||die "Unable to open CID_kegg_summary.csv\n";
-open(INPUBHMDB, "CID-hmdb_summary.csv")	 	||die "Unable to open CID_hmdb_summary.csv\n";
+open(INPUBBIOC, "CID_bioc_summary.csv")	||die "Unable to open CID_biocyc_summary.csv\n";
+open(INPUBCHEB, "CID_cheb_summary.csv") 	||die "Unable to open CID_chebi_summary.csv\n";
+open(INPUBKEGG, "CID_kegg_summary.csv")	 	||die "Unable to open CID_kegg_summary.csv\n";
+open(INPUBHMDB, "CID_hmdb_summary.csv")	 	||die "Unable to open CID_hmdb_summary.csv\n";
 open(INPUBINCH, "CID-InChI-Key")	 	||die "Unable to open CID-InChI-Key\n";
 open(INPUBMASS, "CID-Mass")		 	||die "Unable to open CID-Mass\n";
 open(INPUBSYN, 	"CID-Synonym-filtered")	 	||die "Unable to open CID-Synonym-filtered\n";
@@ -633,7 +633,7 @@ undef(%RXN_ALTS);  undef(%RXN_DIR);   undef(%RXN_EC); undef(%UPID_RXN); undef(%R
 #####################################################################
 ########################   SUBROUTINES   ############################
 #####################################################################
-die;
+#die;
 #CHECK OUTPUTS CODE -- KEEP! - turn into subroutine?
 
 #$cnt=0; $fkc  =keys %CMPD_FORM;	#foreach my $cpd (keys %CMPD_FORM){  						print "CMPD_FORM cpd $cpd val $CMPD_FORM{$cpd}\n";  $cnt++; if($cnt>100){last;}}
